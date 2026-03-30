@@ -1,0 +1,52 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+uploads/
+temp/
+
+# Environments
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Hardhat/Truffle/Foundry (blockchain)
+cache/
+artifacts/
+typechain/
+typechain-types/
+coverage.json
+# slither
+slither.db
+# foundry
+out/
+broadcast/
+.solhint.json
+
+# IDE
+.idea/
+.vscode/
+
+# Python (just in case)
+__pycache__/
+*.pyc
+
+# Database
+*.sqlite3
+db.sqlite3
+postgres-data/
+pgdata/
+
+# OS
+.DS_Store
+Thumbs.db

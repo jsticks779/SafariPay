@@ -1,0 +1,212 @@
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { useLanguage } from '../hooks/useLanguage';
+import toast from 'react-hot-toast';
+import {
+  Zap,
+  ChevronRight,
+  Phone,
+  Languages,
+  ShieldCheck,
+  Lock,
+  Loader2
+} from 'lucide-react';
+import { ALL_COUNTRIES } from '../lib/countries';
+
+type Step = 'form' | 'otp' | 'pin';
+
+export default function Login() {
+  const { login, verifyOtp } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
+  const nav = useNavigate();
+
+  const [step, setStep] = useState<Step>('form');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [showCountries, setShowCountries] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const country = ALL_COUNTRIES.find(c => phone.startsWith(c.prefix)) || ALL_COUNTRIES[ALL_COUNTRIES.length - 1];
+
+  const filteredCountries = ALL_COUNTRIES.filter(c =>
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.prefix.includes(searchTerm)
+  );
+
+  const handleStart = async () => {
+    if (!phone) return toast.error('Enter phone number');
+    setBusy(true);
+    try {
+      const res = await login(phone);
+      setStep('otp');
+      toast.success(res.message || 'Verification code sent!');
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Login failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otp.length !== 6) return toast.error('Enter 6-digit code');
+    setBusy(true);
+    try {
+      const data = await verifyOtp(phone, otp);
+      if (data.needs_pin_setup) {
+        toast.error('Account not set up. Please register.');
+        nav('/register');
+      } else {
+        setStep('pin');
+        setPin('');
+        toast.success('Safe! Now enter your transaction PIN to explore.');
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Code incorrect');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleLoginWithPin = async (directPin?: string) => {
+    const finalPin = directPin || pin;
+    if (finalPin.length !== 4) return toast.error('PIN must be 4 digits');
+    setBusy(true);
+    try {
+      const res = await login(phone, finalPin);
+      if (res.data?.token) {
+        nav('/');
+        toast.success(t('welcome') || 'Welcome back!');
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Login failed. Incorrect PIN.');
+      setPin('');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onKey = (k: string) => {
+    if (k === '⌫') {
+      if (step === 'pin') setPin(p => p.slice(0, -1));
+      return;
+    }
+    if (k === '') return;
+
+    if (step === 'pin') {
+      if (pin.length < 4) {
+        const nc = pin + k;
+        setPin(nc);
+        if (nc.length === 4) setTimeout(() => handleLoginWithPin(nc), 200);
+      }
+    }
+  };
+
+  const nukeNumpad = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'];
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 20px', background: 'var(--bg-dark)' }}>
+      {/* Header */}
+      <div style={{ textAlign: 'center', marginBottom: 48 }} className="animate-up">
+        <div style={{ width: 64, height: 64, borderRadius: 20, background: 'linear-gradient(135deg, var(--primary), var(--success))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', margin: '0 auto 16px', boxShadow: '0 10px 30px rgba(59, 130, 246, 0.3)' }}>
+          <Zap size={32} fill="white" />
+        </div>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, color: 'white', letterSpacing: '-0.03em' }}>SafariPay</h1>
+        <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>Secure Login</p>
+      </div>
+
+      <div style={{ width: '100%', maxWidth: 400 }} className="animate-fade">
+        {step === 'form' && (
+          <div className="card-glow">
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: 'white', marginBottom: 24 }}>Welcome Back</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setShowCountries(true)}
+                  style={{ height: 52, padding: '0 16px', background: 'var(--glass)', border: '1px solid var(--glass-border)', borderRadius: 14, color: 'white', fontSize: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {country.flag}
+                </button>
+                <div style={{ flex: 1, position: 'relative' }}>
+                  <Phone size={18} style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+                  <input className="input" style={{ paddingLeft: 48 }} placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} type="tel" />
+                </div>
+              </div>
+
+              {showCountries && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                  <div className="card-glow" style={{ width: '100%', maxWidth: 400, maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ paddingBottom: 16 }}>
+                      <h3 style={{ fontSize: 18, fontWeight: 700, color: 'white', marginBottom: 16 }}>Select Country</h3>
+                      <input className="input" placeholder="Search country or code..." autoFocus value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                    </div>
+                    <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {filteredCountries.map(c => (
+                        <button key={c.code} onClick={() => { setPhone(c.prefix); setShowCountries(false); setSearchTerm(''); }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'rgba(255,255,255,0.03)', border: 'none', borderRadius: 10, color: 'white', cursor: 'pointer', textAlign: 'left' }}>
+                          <span style={{ fontSize: 24 }}>{c.flag}</span>
+                          <span style={{ flex: 1, fontWeight: 600 }}>{c.name}</span>
+                          <span style={{ color: 'var(--text-dim)' }}>{c.prefix}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <button className="btn" onClick={() => { setShowCountries(false); setSearchTerm(''); }} style={{ marginTop: 16, background: 'rgba(255,255,255,0.05)' }}>Close</button>
+                  </div>
+                </div>
+              )}
+
+              <button className="btn btn-blue" onClick={handleStart} disabled={busy} style={{ height: 56, fontSize: 16, marginTop: 12 }}>
+                {busy ? <Loader2 className="animate-spin" /> : 'Next'} <ChevronRight size={20} />
+              </button>
+
+              <p style={{ textAlign: 'center', fontSize: 14, color: 'var(--text-dim)', marginTop: 8 }}>
+                New to SafariPay? <Link to="/register" style={{ color: 'var(--primary)', fontWeight: 700, textDecoration: 'none' }}>Create Account</Link>
+              </p>
+            </div>
+          </div>
+        )}
+
+        {step === 'otp' && (
+          <div className="card-glow animate-up" style={{ textAlign: 'center' }}>
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(59, 130, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', margin: '0 auto 16px' }}>
+              <Lock size={24} />
+            </div>
+            <h2 style={{ fontSize: 24, fontWeight: 700, color: 'white', marginBottom: 8 }}>Secure Login</h2>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 32 }}>Enter code sent to {phone}</p>
+            <input className="input" style={{ textAlign: 'center', fontSize: 28, letterSpacing: '0.4em', fontWeight: 700, height: 72, marginBottom: 24 }}
+              placeholder="0 0 0 0 0 0" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} type="tel" />
+            <button className="btn btn-blue" onClick={handleVerifyOtp} disabled={busy || otp.length !== 6}>
+              {busy ? <Loader2 className="animate-spin" /> : 'Confirm'}
+            </button>
+          </div>
+        )}
+
+        {step === 'pin' && (
+          <div className="card-glow animate-up" style={{ textAlign: 'center' }}>
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--success)', margin: '0 auto 16px' }}>
+              <ShieldCheck size={24} />
+            </div>
+            <h2 style={{ fontSize: 24, fontWeight: 700, color: 'white', marginBottom: 8 }}>Transaction PIN</h2>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 32 }}>Enter your 4-digit code to log in</p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 40 }}>
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} style={{ width: 14, height: 14, borderRadius: 7, border: `2px solid ${pin.length > i ? 'var(--primary)' : 'var(--glass-border)'}`, background: pin.length > i ? 'var(--primary)' : 'transparent', transition: 'all 0.2s' }} />
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, maxWidth: 280, margin: '0 auto 32px' }}>
+              {nukeNumpad.map((k, i) => k === '' ? <div key={i} /> : (
+                <button key={i} className="numpad-btn" onClick={() => onKey(k)} style={{ width: 64, height: 64, fontSize: 22, fontWeight: 600 }}>{k}</button>
+              ))}
+            </div>
+            <button onClick={() => setStep('form')} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+          </div>
+        )}
+      </div>
+
+      <button onClick={() => setLanguage(language === 'EN' ? 'SW' : 'EN')}
+        style={{ position: 'fixed', bottom: 32, right: 32, height: 44, padding: '0 16px', borderRadius: 12, background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'white', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+        <Languages size={18} /> {language}
+      </button>
+    </div>
+  );
+}
