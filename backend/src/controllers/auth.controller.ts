@@ -561,11 +561,8 @@ export class AuthController {
                 return Responder.ok(res, { verified: false }, 'Skip recorded. Verification can be completed later.');
             }
 
-            // Implement Shufti Pro Global KYC & AML Verification logic
             const userData = { idType, idNumber, documentCountry };
-            const images = { id_document: true, selfie: true };
-            
-            const shuftiResponse = await KycService.processShuftiProVerification(req.user.id, userData, images);
+            const shuftiResponse = await KycService.processShuftiVerification(req.user.id, userData);
 
             await redisClient.del(`user_profile:${req.user.id}`);
             
