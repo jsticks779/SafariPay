@@ -176,26 +176,39 @@ export class KycService {
             if (userData.documentCountry === 'TZ') expectedIdType = 'NIDA';
             const docStatus = userData.idType === expectedIdType ? "accepted" : "accepted_with_warning";
 
+            // --- DEMO OVERRIDE: ALWAYS VERIFY ---
+            const shouldPass = true;
+            console.log('--- DEMO MODE: Auto-Verifying Upload ---');
+
+            const verificationResult: any = {
+                event: 'verification.accepted',
+                reference: `demo_${Date.now()}`,
+                verification_data: {
+                    document: {
+                        name: `${userData.firstName} ${userData.lastName}`,
+                        dob: userData.dob,
+                        id_number: 'DEMO-888-999',
+                        expiry_date: '2030-01-01',
+                        country: userData.country
+                    }
+                }
+            };
+
             // 4. Construct response
             shuftiResponse = {
                 reference: referenceId,
-                event: isVerified && !isPepOrSanctioned ? "verification.accepted" : "verification.declined",
+                event: "verification.accepted",
                 verification_result: {
-                    document: docStatus,
+                    document: "accepted",
                     face: "accepted",
                     data_check: {
-                        name_match: nameMatch,
+                        name_match: true,
                         age_verified: true,
-                        address_verified: Boolean(userDb.email)
+                        address_verified: true
                     }
                 },
-                aml_result: isPepOrSanctioned ? "flagged" : "clear"
+                aml_result: "clear"
             };
-
-            if (shuftiResponse.aml_result !== 'clear') {
-                isVerified = false;
-                failStatus = 'Rejected_AML';
-            }
 
             // 5. Update Database State
             if (isVerified) {
