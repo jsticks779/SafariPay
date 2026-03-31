@@ -5,7 +5,7 @@
  * Categories: BLOCKCHAIN, TX, USDT, GAS, WALLET, SECURITY, QUEUE
  */
 
-type LogCategory = 'BLOCKCHAIN' | 'TX' | 'USDT' | 'GAS' | 'WALLET' | 'SECURITY' | 'QUEUE' | 'API' | 'DB' | 'AUTH' | 'BRIDGE' | 'TRANSFER' | 'AUTO_CONVERT';
+type LogCategory = 'BLOCKCHAIN' | 'TX' | 'USDT' | 'GAS' | 'WALLET' | 'SECURITY' | 'QUEUE' | 'API' | 'DB' | 'AUTH' | 'BRIDGE' | 'TRANSFER' | 'AUTO_CONVERT' | 'STORAGE';
 
 const isProduction = process.env.NODE_ENV === 'production';
 

@@ -5,15 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../hooks/useLanguage';
 import { getOfflineTransactions, OfflineJob } from '../lib/offlineQueue';
 import toast from 'react-hot-toast';
-import {
-  ArrowLeft,
-  Globe,
-  Banknote,
-  ArrowDownLeft,
-  ArrowUpRight,
-  Search,
-  Inbox
-} from 'lucide-react';
+import { ArrowLeft, Globe, Banknote, ArrowDownLeft, ArrowUpRight, Search, Inbox, ShieldCheck } from 'lucide-react';
 
 export default function Transactions() {
   const { user } = useAuth();
@@ -187,9 +179,33 @@ export default function Transactions() {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--white)', marginBottom: 2 }}>{txLabel(tx)}</p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <p style={{ fontSize: 12, color: 'var(--text-dim)' }}>{fmtDate(tx.created_at)}</p>
                 {tx.type === 'cross_border' && <span className="badge badge-blue" style={{ fontSize: 9 }}>{t('global')}</span>}
+                {tx.metadata?.ipfs_cid && (
+                  <a 
+                    href={`https://w3s.link/ipfs/${tx.metadata.ipfs_cid}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ 
+                      fontSize: 10, 
+                      color: 'var(--success)', 
+                      fontWeight: 700, 
+                      textDecoration: 'none',
+                      background: 'rgba(16, 185, 129, 0.1)',
+                      padding: '1px 6px',
+                      borderRadius: 6,
+                      border: '1px solid rgba(16, 185, 129, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}
+                  >
+                    <ShieldCheck size={10} />
+                    Receipt
+                  </a>
+                )}
               </div>
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>

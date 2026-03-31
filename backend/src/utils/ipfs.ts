@@ -1,36 +1,35 @@
-import crypto from 'crypto';
-
+import { StorageService } from '../services/storage.service';
+import { logger } from './logger';
 
 /**
- * Decentralized Storage Engine (Powered by web3.storage / Filecoin)
- * -------------------------------------------------------------
+ * Decentralized Storage Engine (Powered by Storacha / Filecoin)
  * Every financial event in SafariPay is anchored to the Filecoin network
- * using web3.storage for immutable data persistence and transparency.
+ * using Storacha for immutable data persistence and transparency.
  */
 export class IPFSService {
+    /**
+     * Upload JSON data to Storacha (returns CIDv1 in base32 format: bafy...)
+     * Throws error if upload fails - caller should handle gracefully
+     */
     static async uploadJSON(data: any): Promise<string> {
-        console.log(`\n🪐 [Filecoin Network] Initializing decentralized storage via web3.storage...`);
+        logger.info('STORAGE', '🪐 Initializing decentralized storage via Storacha...');
 
-        try {
-            // In production, we utilize the w3up-client from @web3-storage/w3up-client
-            // to fulfill the decentralized storage proofs across the IPFS/Filecoin network.
-            const module = await new Function("return import('ipfs-http-client')")();
-            
-            // Using the global web3.storage gateway/cluster for decentralized persistence
-            const ipfs = module.create({ url: 'https://ipfs.infura.io:5001/api/v0' }); 
+        // Map generic data to ReceiptData structure
+        const receiptData = {
+            txHash: data.txHash || data.tx_id || `TX_${Date.now()}`,
+            from: data.from || data.sender || 'Unknown',
+            to: data.to || data.receiver || 'Unknown',
+            amount: data.amount ? `${data.amount} ${data.currency || 'USDT'}` : 'N/A',
+            timestamp: data.timestamp || new Date().toISOString(),
+            network: data.network || 'Polygon'
+        };
 
-            const buffer = Buffer.from(JSON.stringify(data));
-            const result = await ipfs.add(buffer);
-            
-            console.log(`🪐 [web3.storage] Permanent CID anchored successfully! CID: ${result.path}\n`);
-            console.log(`🔗 Verify at: https://w3p.link/ipfs/${result.path}`);
-            
-            return result.path;
-        } catch (e) {
-            // Fallback for restricted development environments
-            console.warn('⚠️ [Filecoin Network] Cluster timeout. Using deterministic local cryptographic CIDv1 mock...');
-            const hash = crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex');
-            return `bafybeig${hash.substring(0, 48)}`;
-        }
+        // Will throw error if upload fails
+        const cid = await StorageService.uploadReceipt(receiptData);
+        
+        logger.info('STORAGE', `✅ Receipt anchored to Filecoin: ${cid}`);
+        logger.info('STORAGE', `🔗 View at: https://w3s.link/ipfs/${cid}`);
+        
+        return cid;
     }
 }

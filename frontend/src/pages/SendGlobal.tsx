@@ -183,10 +183,30 @@ export default function SendGlobal() {
                     </div>
                 </div>
 
-                {result.transaction.tx_hash && (
-                    <div style={{ padding: '16px 0' }}>
-                        <p style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 8, textTransform: 'uppercase', fontWeight: 600 }}>Blockchain Reference</p>
-                        <p style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--primary)', wordBreak: 'break-all' }}>{result.transaction.tx_hash}</p>
+                {result.ipfs_receipt && (
+                    <div style={{ padding: '16px 0', marginTop: 12, borderTop: '1px solid var(--glass-border)', textAlign: 'center' }}>
+                        <a 
+                            href={`https://w3s.link/ipfs/${result.ipfs_receipt}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                gap: 8, 
+                                color: 'var(--success)', 
+                                fontSize: 13, 
+                                fontWeight: 600,
+                                textDecoration: 'none',
+                                padding: '12px',
+                                borderRadius: 12,
+                                background: 'rgba(16, 185, 129, 0.1)',
+                                border: '1px solid rgba(16, 185, 129, 0.2)'
+                            }}
+                        >
+                            <ShieldCheck size={16} />
+                            Verifiable Filecoin Receipt
+                        </a>
                     </div>
                 )}
             </div>

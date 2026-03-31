@@ -311,9 +311,9 @@ router.post('/transfer', async (req: AuthRequest, res: Response): Promise<void> 
 
     // 6. Record Transaction
     const { rows: txRows } = await client.query(
-      `INSERT INTO transactions(sender_id, receiver_id, sender_phone, receiver_phone, amount, type, status, description, fee, tx_hash)
-       VALUES($1, $2, $3, $4, $5, 'cross_border', 'completed', $6, $7, $8) RETURNING *`,
-      [sender.id, receiver.id, sender.phone, receiver.phone, amount, description || 'Secure Crypto Bridge', fee, unifiedRes.txHash || 'PENDING']
+      `INSERT INTO transactions(sender_id, receiver_id, sender_phone, receiver_phone, amount, type, status, description, fee, tx_hash, metadata)
+       VALUES($1, $2, $3, $4, $5, 'cross_border', 'completed', $6, $7, $8, $9) RETURNING *`,
+      [sender.id, receiver.id, sender.phone, receiver.phone, amount, description || 'Secure Crypto Bridge', fee, unifiedRes.txHash || 'PENDING', JSON.stringify({ ipfs_cid: unifiedRes.ipfsCid })]
     );
 
     await client.query('COMMIT');
@@ -359,6 +359,7 @@ Thank you for choosing SafariPay Global.
       success: true,
       transaction: txRows[0],
       tx_hash: unifiedRes.txHash,
+      ipfs_receipt: unifiedRes.ipfsCid,
       network: unifiedRes.network,
       message: 'Secure cross-border transfer finalized!'
     });
@@ -427,7 +428,22 @@ router.post('/deposit', async (req: AuthRequest, res: Response): Promise<void> =
     const safariMsg = `SafariPay Confirmed: You have received a deposit of TZS ${amount.toLocaleString()} from ${networkSender}. Your balance has been updated!`;
     await SmsService.sendSms(user.phone, safariMsg, 'SYSTEM', 'SAFARIPAY');
 
-    res.json({ message: 'Deposit successful', stableAmount, txHash });
+    const cid = await IPFSService.uploadJSON({
+      tx_id: txHash,
+      type: 'Deposit',
+      amount: `${amount} TZS`,
+      stableAmount: `${stableAmount.toFixed(2)} USDT`,
+      phone: phone || user.phone,
+      timestamp: new Date().toISOString(),
+      network: provider || 'M-Pesa'
+    });
+
+    await pool.query(
+      'UPDATE transactions SET metadata = jsonb_set(metadata, \'{ipfs_cid}\', $1) WHERE tx_hash=$2',
+      [`"${cid}"`, txHash]
+    );
+
+    res.json({ message: 'Deposit successful', stableAmount, txHash, ipfs_receipt: cid });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -445,7 +461,17 @@ router.post('/withdraw', async (req: AuthRequest, res: Response): Promise<void> 
       user_pin
     );
 
-    res.json({ message: gatewayRes.message, txHash: gatewayRes.reference });
+    // Generate Decentralized Receipt for Withdrawal
+    const cid = await IPFSService.uploadJSON({
+      tx_id: gatewayRes.reference,
+      type: 'Withdrawal',
+      amount: `${amount} TZS`,
+      phone: phone || 'N/A',
+      timestamp: new Date().toISOString(),
+      network: provider || 'MPESA'
+    });
+
+    res.json({ message: gatewayRes.message, txHash: gatewayRes.reference, ipfs_receipt: cid });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -503,9 +529,9 @@ router.post('/withdraw/crypto', async (req: AuthRequest, res: Response): Promise
 
     // 5. TX Write
     const { rows: txRows } = await client.query(
-      `INSERT INTO transactions(sender_id, receiver_phone, amount, type, status, description, fee, tx_hash)
-       VALUES ($1, $2, $3, 'cross_border', 'completed', $4, $5, $6) RETURNING *`,
-      [req.user!.id, wallet_address, amount_tzs, `Web3 Withdrawal: ${network}`, fee, unifiedRes.txHash || 'PENDING']
+      `INSERT INTO transactions(sender_id, receiver_phone, amount, type, status, description, fee, tx_hash, metadata)
+       VALUES ($1, $2, $3, 'cross_border', 'completed', $4, $5, $6, $7) RETURNING *`,
+      [req.user!.id, wallet_address, amount_tzs, `Web3 Withdrawal: ${network}`, fee, unifiedRes.txHash || 'PENDING', JSON.stringify({ ipfs_cid: unifiedRes.ipfsCid })]
     );
 
     await client.query('COMMIT');
@@ -574,9 +600,9 @@ router.post('/external', async (req: AuthRequest, res: Response): Promise<void> 
     await pool.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [total, req.user!.id]);
 
     const { rows: txRows } = await pool.query(
-      `INSERT INTO transactions(sender_id, receiver_phone, amount, type, status, description, fee, tx_hash)
-       VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7) RETURNING *`,
-      [req.user!.id, receiver_id, amount, 'local', `Transfer to ${provider || 'External'}: ${description || ''}`, fee, unifiedRes.txHash || 'PENDING']
+      `INSERT INTO transactions(sender_id, receiver_phone, amount, type, status, description, fee, tx_hash, metadata)
+       VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7, $8) RETURNING *`,
+      [req.user!.id, receiver_id, amount, 'local', `Transfer to ${provider || 'External'}: ${description || ''}`, fee, unifiedRes.txHash || 'PENDING', JSON.stringify({ ipfs_cid: unifiedRes.ipfsCid })]
     );
 
     // 📱 [JUDGE DEMO] External Provider Simulation — REALISTIC SENDERS

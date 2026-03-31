@@ -4,18 +4,7 @@ import api, { fmt } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../hooks/useLanguage';
 import toast from 'react-hot-toast';
-import {
-    ArrowLeft,
-    CheckCircle2,
-    Smartphone,
-    Building2,
-    ChevronRight,
-    Banknote,
-    History,
-    Info,
-    Globe,
-    WifiOff
-} from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Smartphone, Building2, ChevronRight, Banknote, History, Info, Globe, WifiOff, ShieldCheck } from 'lucide-react';
 import Select from '../components/Select';
 import { ALL_COUNTRIES } from '../lib/countries';
 import { queueOfflineTransaction } from '../lib/offlineQueue';
@@ -51,6 +40,8 @@ export default function Withdraw() {
     const providers = activeCountry.providers || [];
     const banks = activeCountry.banks || [];
 
+    const [result, setResult] = useState<any>(null);
+
     const handleWithdraw = async () => {
         if (!pin || pin.length !== 4) return toast.error('Please enter your 4-digit PIN to authorize the withdrawal on-chain.');
         
@@ -80,7 +71,7 @@ export default function Withdraw() {
             const payload = method === 'crypto' ? {
                 wallet_address: wallet,
                 network,
-                amount_usdt: Number(amount) / 2850, // Approximation to pass validation. True conversion happens on-chain/backend
+                amount_usdt: Number(amount) / 2850,
                 user_pin: pin,
                 amount_tzs: Number(amount)
             } : {
@@ -96,7 +87,8 @@ export default function Withdraw() {
                 setBusy(false);
                 return;
             }
-            await api.post(url, payload);
+            const { data } = await api.post(url, payload);
+            setResult(data);
             setStep('done');
             refresh();
         } catch (e: any) {
@@ -116,9 +108,45 @@ export default function Withdraw() {
                 <CheckCircle2 size={56} strokeWidth={1.5} />
             </div>
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, color: 'var(--white)', marginBottom: 16 }}>{t('withdraw_success')}</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: 16, marginBottom: 40 }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: 16, marginBottom: 24 }}>
                 Funds will arrive in your <span style={{ color: 'var(--white)', fontWeight: 600 }}>{provider}</span> account shortly.
             </p>
+
+            <div className="card" style={{ maxWidth: 380, margin: '0 auto 40px', textAlign: 'left' }}>
+                {result?.ipfs_receipt && (
+                    <div style={{ padding: '16px 0', textAlign: 'center' }}>
+                        <a 
+                            href={`https://w3s.link/ipfs/${result.ipfs_receipt}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                gap: 8, 
+                                color: 'var(--success)', 
+                                fontSize: 13, 
+                                fontWeight: 600,
+                                textDecoration: 'none',
+                                padding: '12px',
+                                borderRadius: 12,
+                                background: 'rgba(16, 185, 129, 0.1)',
+                                border: '1px solid rgba(16, 185, 129, 0.2)'
+                            }}
+                        >
+                            <ShieldCheck size={16} />
+                            Verifiable Filecoin Receipt
+                        </a>
+                    </div>
+                )}
+                {result?.txHash && (
+                    <div style={{ padding: '16px 0', borderTop: '1px solid var(--glass-border)' }}>
+                        <p style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 8, textTransform: 'uppercase', fontWeight: 600 }}>{t('tx_hash')}</p>
+                        <p style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--primary)', wordBreak: 'break-all' }}>{result.txHash}</p>
+                    </div>
+                )}
+            </div>
+
             <button className="btn btn-blue" onClick={() => nav('/')} style={{ maxWidth: 320, margin: '0 auto' }}>{t('done_btn')}</button>
         </div>
     );

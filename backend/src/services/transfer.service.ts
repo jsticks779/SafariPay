@@ -5,6 +5,7 @@ import { BlockchainConfig } from '../config/blockchain.config';
 import { UsdtService } from './usdt.service';
 import { UniversalGatewayService, MobileProvider } from './universal_gateway.service';
 import { paymentBridge } from './PaymentBridge';
+import { StorageService } from './storage.service';
 import { logger } from '../utils/logger';
 
 export type SendCategory = 'safari' | 'mobile' | 'bank' | 'global';
@@ -23,6 +24,7 @@ export interface TransferRequest {
 export interface TransferResponse {
     success: boolean;
     txHash?: string;
+    ipfsCid?: string;
     message: string;
     network: 'TESTNET' | 'MAINNET';
     /** Explorer link to view the transaction */
@@ -97,13 +99,45 @@ export class UnifiedTransferService {
                     usdtAmount
                 );
 
-                return {
+                // 🌟 [Decentralized Network] Auto-Generation of Filecoin Receipt
+                let ipfsCid: string | null = null;
+                let storageError: string | null = null;
+                
+                try {
+                    ipfsCid = await StorageService.uploadReceipt({
+                        txHash,
+                        from: await BlockchainService.getSigner(req.senderPrivateKey).getAddress(),
+                        to: recipientWallet,
+                        amount: `${usdtAmount} USDT`,
+                        timestamp: new Date().toISOString(),
+                        network: BlockchainConfig.network.name
+                    });
+                } catch (storageErr: any) {
+                    storageError = `Storage Sync Failed: ${storageErr.message}`;
+                    logger.warn('TRANSFER', `Receipt storage failed but transaction succeeded: ${storageError}`);
+                    // Continue without receipt - transaction is still on-chain
+                }
+
+                const response: any = {
                     success: true,
                     txHash,
                     message: `${mode} USDT transfer confirmed on ${BlockchainConfig.network.name} (block #${receipt.blockNumber})`,
                     network: mode,
                     explorerUrl: `${explorer}/tx/${txHash}`,
                 };
+                
+                // Only add CID if storage succeeded
+                if (ipfsCid) {
+                    response.ipfsCid = ipfsCid;
+                    response.receiptLink = `https://w3s.link/ipfs/${ipfsCid}`;
+                }
+                
+                // Add storage error if it occurred
+                if (storageError) {
+                    response.storageStatus = storageError;
+                }
+                
+                return response;
             } catch (err: any) {
                 logger.warn('TRANSFER', `On-chain USDT transfer failed, falling back to anchor: ${err.message}`);
                 // Fall through to Path B
@@ -135,9 +169,19 @@ export class UnifiedTransferService {
 
                 const receipt = await tx.wait(BlockchainConfig.gas.confirmations);
 
+                const ipfsCid = await StorageService.uploadReceipt({
+                    txHash: tx.hash,
+                    from: req.userId,
+                    to: recipientWallet,
+                    amount: `${req.amount} TZS`,
+                    timestamp: new Date().toISOString(),
+                    network: BlockchainConfig.network.name
+                });
+
                 return {
                     success: true,
                     txHash: tx.hash,
+                    ipfsCid,
                     message: `${mode} transfer anchored on ${BlockchainConfig.network.name} (block #${receipt?.blockNumber})`,
                     network: mode,
                     explorerUrl: `${explorer}/tx/${tx.hash}`,
@@ -149,9 +193,20 @@ export class UnifiedTransferService {
 
         // ─── Path C: Pure off-chain (no blockchain keys configured) ──────────────
         const offChainHash = `0x${ethers.hexlify(ethers.randomBytes(32)).substring(2)}`;
+        
+        const ipfsCid = await StorageService.uploadReceipt({
+            txHash: offChainHash,
+            from: req.userId,
+            to: recipientWallet,
+            amount: `${req.amount} TZS`,
+            timestamp: new Date().toISOString(),
+            network: 'Off-Chain'
+        });
+
         return {
             success: true,
             txHash: offChainHash,
+            ipfsCid,
             message: `${mode} transfer completed (off-chain). Set SAFARI_GUARDIAN_PRIVATE_KEY to enable on-chain anchoring.`,
             network: mode,
         };
@@ -161,31 +216,71 @@ export class UnifiedTransferService {
      * Mobile Money (B2C) API Outbound
      */
     private static async handleMobileTransfer(req: TransferRequest, mode: 'TESTNET' | 'MAINNET'): Promise<TransferResponse> {
-        if (mode === 'TESTNET') {
-            return { success: true, txHash: `mm_${Math.random().toString(36).substring(7)}`, message: `Sandbox ${req.provider || 'Mobile'} Payout Accepted`, network: 'TESTNET' };
-        }
+        const txHash = mode === 'TESTNET' ? `mm_${Math.random().toString(36).substring(7)}` : 'Real-B2C-Hash';
+        
+        const ipfsCid = await StorageService.uploadReceipt({
+            txHash,
+            from: req.userId,
+            to: req.recipient,
+            amount: `${req.amount} TZS`,
+            timestamp: new Date().toISOString(),
+            network: `Africa's Talking / M-Pesa ${mode}`
+        });
 
-        // Mainnet Logic (Real M-Pesa / Africa's Talking B2C API)
-        // const res = await paymentBridge.processOffRamp(req.amount / 2500, req.recipient, req.userId);
-        return { success: true, txHash: 'Real-B2C-Hash', message: 'Production M-Pesa Payout initiated', network: 'MAINNET' };
+        return { 
+            success: true, 
+            txHash, 
+            ipfsCid,
+            message: mode === 'TESTNET' ? `Sandbox Mobile Payout Accepted` : 'Production M-Pesa Payout initiated', 
+            network: mode 
+        };
     }
 
     /**
      * Bank Transfer (B2C)
      */
     private static async handleBankTransfer(req: TransferRequest, mode: 'TESTNET' | 'MAINNET'): Promise<TransferResponse> {
-        if (mode === 'TESTNET') {
-            return { success: true, txHash: `bnk_${Math.random().toString(36).substring(7)}`, message: 'Bank Transfer pending. Note: Standard banking rails take 1-2 business days to clear.', network: 'TESTNET' };
-        }
+        const txHash = mode === 'TESTNET' ? `bnk_${Math.random().toString(36).substring(7)}` : 'Bank-Ref-123';
+        
+        const ipfsCid = await StorageService.uploadReceipt({
+            txHash,
+            from: req.userId,
+            to: req.recipient,
+            amount: `${req.amount} TZS`,
+            timestamp: new Date().toISOString(),
+            network: `Flutterwave / Interswitch ${mode}`
+        });
 
-        // Mainnet Logic (Flutterwave / Interswitch API)
-        return { success: true, txHash: 'Bank-Ref-123', message: 'Bank Transfer pending. Note: Standard banking rails take 1-2 business days to clear.', network: 'MAINNET' };
+        return { 
+            success: true, 
+            txHash, 
+            ipfsCid,
+            message: 'Bank Transfer pending. Note: Standard banking rails take 1-2 business days to clear.', 
+            network: mode 
+        };
     }
 
     /**
      * Global Remittance
      */
     private static async handleGlobalTransfer(req: TransferRequest, mode: 'TESTNET' | 'MAINNET'): Promise<TransferResponse> {
-        return { success: true, txHash: 'Global-Bridge-Tx', message: `${mode} Cross-border bridge lock initiated`, network: mode };
+        const txHash = 'Global-Bridge-Tx';
+        
+        const ipfsCid = await StorageService.uploadReceipt({
+            txHash,
+            from: req.userId,
+            to: req.recipient,
+            amount: `${req.amount} TZS`,
+            timestamp: new Date().toISOString(),
+            network: `Unified Bridge ${mode}`
+        });
+
+        return { 
+            success: true, 
+            txHash, 
+            ipfsCid,
+            message: `${mode} Cross-border bridge lock initiated`, 
+            network: mode 
+        };
     }
 }

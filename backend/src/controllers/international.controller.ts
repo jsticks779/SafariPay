@@ -6,6 +6,7 @@ import { FXService } from '../services/fx.service';
 import { SmsService } from '../services/sms_logger.service';
 import { AuthRequest } from '../middleware/auth';
 import { ethers } from 'ethers';
+import { IPFSService } from '../utils/ipfs';
 
 export class InternationalController {
     /**
@@ -80,6 +81,18 @@ export class InternationalController {
                 [sender_id, recipient_phone, amount_source, description || `Global Transfer to ${recipient_country}`, fee, txHash, rate, dest_currency, targetAmount]
             );
 
+            // 7.5 Store IPFS Receipt
+            const cid = await IPFSService.uploadJSON({
+                txHash,
+                from: sender.phone,
+                to: recipient_phone,
+                amount: `${amount_source} ${sender.currency}`,
+                targetAmount: `${targetAmount} ${dest_currency}`,
+                timestamp: new Date().toISOString(),
+                network: 'Polygon Amoy (Settled)'
+            });
+            await client.query('UPDATE transactions SET metadata = jsonb_set(metadata, \'{ipfs_cid}\', $1) WHERE id=$2', [`"${cid}"`, txRows[0].id]);
+
             await client.query('COMMIT');
 
             // 8. Off-Ramp Simulation (External Webhook)
@@ -97,6 +110,7 @@ export class InternationalController {
                 exchange_rate: rate,
                 target_amount: targetAmount,
                 destination_currency: dest_currency,
+                ipfs_receipt: cid,
                 fee: fee
             }, 'International transfer processed successfully');
 
