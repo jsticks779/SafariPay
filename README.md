@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://w3s.link/ipfs/bafybeifaqidm65hps4hizv6z3p4v3w5lhi5v4q5w3l2v4x5z3l2v4x5z3l2v" alt="SafariPay" width="120px" />
+  <img src="logo.png" alt="SafariPay" width="120px" />
   <h1>🦁 SafariPay</h1>
   <p><b>Africa's Unified Digital Economy on Flow & Filecoin</b></p>
   <p>Rapid P2P Payments · Decentralized Credit · Micro-Loans · On/Off-Ramp</p>
