@@ -61,17 +61,17 @@ export default function Profile() {
           <div style={{ flex: 1 }}>
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, color: 'var(--white)', marginBottom: 4 }}>{user?.name}</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {user?.trust_level === 'HIGH' ? (
-                <span className="badge badge-green" style={{ fontSize: 10 }}>
+              {(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? (
+                <span className="badge badge-green" style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
                   <ShieldCheck size={12} /> {t('kyc_verified')}
                 </span>
               ) : (
                 <button 
                   onClick={() => nav('/onboarding?mode=verify')}
                   className="badge" 
-                  style={{ fontSize: 10, background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                  style={{ fontSize: 10, background: 'rgba(245,158,11,0.1)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 8 }}
                 >
-                  <AlertCircle size={10} /> {t('verify_now')}
+                  <AlertCircle size={12} /> {t('verify_now')}
                 </button>
               )}
               <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{user?.phone}</p>

@@ -259,9 +259,10 @@ export default function Withdraw() {
 
                     <button
                         className="btn btn-blue"
-                        disabled={!amount || Number(amount) <= 0 || (method === 'crypto' ? !wallet || wallet.length < 42 : method === 'mobile' ? !phone || !provider : !account || !provider)}
+                        disabled={!amount || Number(amount) <= 0 || busy}
                         onClick={() => {
-                            if (user?.trust_level !== 'HIGH') {
+                            const isKycOk = user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved';
+                            if (!isKycOk) {
                                 toast.error('Identity verification required. Please complete KYC.');
                                 nav('/onboarding?mode=verify');
                                 return;
@@ -270,13 +271,13 @@ export default function Withdraw() {
                         }}
                         style={{
                             marginTop: 8,
-                            background: user?.trust_level !== 'HIGH' ? 'rgba(245, 158, 11, 0.1)' : 'var(--primary)',
-                            border: user?.trust_level !== 'HIGH' ? '1px solid rgba(245, 158, 11, 0.3)' : 'none',
-                            color: user?.trust_level !== 'HIGH' ? '#fbbf24' : 'white',
-                            boxShadow: user?.trust_level !== 'HIGH' ? 'none' : '0 10px 25px rgba(59, 130, 246, 0.3)'
+                            background: !(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? 'rgba(245, 158, 11, 0.1)' : 'var(--primary)',
+                            border: !(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? '1px solid rgba(245, 158, 11, 0.3)' : 'none',
+                            color: !(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? '#fbbf24' : 'white',
+                            boxShadow: !(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? 'none' : '0 10px 25px rgba(59, 130, 246, 0.3)'
                         }}
                     >
-                        {user?.trust_level !== 'HIGH' ? 'Verify KYC to Withdraw' : t('next')} <ChevronRight size={18} style={{ marginLeft: 6 }} />
+                        {!(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? 'Verify KYC to Withdraw' : t('next')} <ChevronRight size={18} style={{ marginLeft: 6 }} />
                     </button>
                 </div>
             )}

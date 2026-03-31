@@ -22,13 +22,14 @@ export default function Onboarding() {
     const [step, setStep] = useState<Step>(isVerifyMode ? 'document' : 'personal');
     const [busy, setBusy] = useState(false);
 
-    // Personal Info
-    const [firstName, setFirstName] = useState(user?.name?.split(' ')[0] || '');
-    const [lastName, setLastName] = useState(user?.name?.split(' ').slice(1).join(' ') || '');
-    const [email, setEmail] = useState('');
-    const [dob, setDob] = useState('');
+    // Personal Info Initialization
+    const u = user as any;
+    const [firstName, setFirstName] = useState(u?.first_name || user?.name?.split(' ')[0] || '');
+    const [lastName, setLastName] = useState(u?.last_name || user?.name?.split(' ').slice(1).join(' ') || '');
+    const [email, setEmail] = useState(user?.email || '');
+    const [dob, setDob] = useState(u?.dob || '');
     const [country, setCountry] = useState(user?.country || 'TZ');
-    const [address, setAddress] = useState('');
+    const [address, setAddress] = useState(u?.address || '');
     const [showCountryPicker, setShowCountryPicker] = useState(false);
 
     // Document Upload
@@ -99,22 +100,36 @@ export default function Onboarding() {
     const handleVerifyDocuments = async () => {
         if (!idFile || !selfieFile) return toast.error('Please upload both your ID and selfie');
         setVerifying(true);
+        const finalName = (firstName && lastName) ? `${firstName} ${lastName}` : (u?.name || `${u?.first_name} ${u?.last_name}` || 'Safari User');
+
+        // Simulate file upload delay
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
         try {
-            const { data } = await api.post('/auth/kyc-verify', {
+            // Even in demo mode, we "send" the metadata to ensure the backend records the intent
+            const { data: rawData } = await api.post('/auth/kyc-verify', {
                 id_document: true,
                 selfie: true,
                 idType,
                 documentCountry,
-                name: `${firstName} ${lastName}`
+                name: finalName,
+                // We send filenames as reference, in a real app we'd use FormData
+                idFileName: idFile.name,
+                selfieFileName: selfieFile.name
             });
-            if (data.reference) {
-                setShuftiResponseData(data);
-                if (data.event === 'verification.accepted') {
-                    setVerified(true);
-                    toast.success('Identity verified! ✅');
-                } else {
-                    toast.error('Identity declined. Check details.');
-                }
+
+            const data = (rawData as any).data || rawData;
+
+            // In our demo, any picture makes the app "agree"
+            const isAccepted = data?.verified === true || 
+                              data?.status === 'verified' ||
+                              data?.event === 'verification.accepted';
+
+            if (isAccepted) {
+                setVerified(true);
+                toast.success('Identity verified! ✅');
+            } else {
+                toast.error('Identity verification failed. Please try again.');
             }
         } catch (e: any) {
             const msg = e.response?.data?.message || e.response?.data?.error || 'Verification error';
@@ -129,8 +144,15 @@ export default function Onboarding() {
         setStep('terms');
     };
 
-    const handleProceedAfterDocs = () => {
-        setStep('terms');
+    const handleProceedAfterDocs = async () => {
+        if (isVerifyMode) {
+            // Force a refresh of the user object to ensure the dashboard sees the new status
+            await refresh();
+            toast.success('Identity verified! You now have full access.');
+            nav('/');
+        } else {
+            setStep('terms');
+        }
     };
 
     const handleAcceptTerms = async () => {
@@ -138,7 +160,7 @@ export default function Onboarding() {
         setBusy(true);
         try {
             await api.post('/auth/accept-terms', {});
-            await refresh();
+            await refresh(); // Force refresh of the global user object!
             toast.success('Welcome to SafariPay! 🎉');
             nav('/');
         } catch (e: any) {
@@ -188,7 +210,7 @@ export default function Onboarding() {
 
             {!isVerifyMode && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-                    {stepIndex > 0 && (
+                    {stepIndex > 0 && !isVerifyMode && (
                         <button 
                             onClick={() => setStep(step === 'terms' ? 'document' : 'personal')} 
                             style={{ width: 44, height: 44, borderRadius: 14, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
@@ -197,13 +219,18 @@ export default function Onboarding() {
                         </button>
                     )}
                     <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                            {steps.map((s, i) => (
-                                <div key={i} style={{ flex: 1 }}>
-                                    <div style={{ height: 4, borderRadius: 2, background: i <= stepIndex ? '#3b82f6' : 'rgba(255,255,255,0.1)', marginBottom: 8 }} />
-                                </div>
-                            ))}
-                        </div>
+                        {!isVerifyMode && (
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 40, width: '100%' }}>
+                                {[0, 1, 2].map(i => (
+                                    <div key={i} style={{ 
+                                        flex: 1, height: 6, borderRadius: 3, 
+                                        background: stepIndex >= i ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+                                        boxShadow: stepIndex >= i ? '0 0 10px rgba(59, 130, 246, 0.3)' : 'none',
+                                        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+                                    }} />
+                                ))}
+                            </div>
+                        )}
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                             <span style={{ fontSize: 10, fontWeight: 700, color: stepIndex >= 0 ? 'white' : 'var(--text-dim)' }}>Personal</span>
                             <span style={{ fontSize: 10, fontWeight: 700, color: stepIndex >= 1 ? 'white' : 'var(--text-dim)' }}>Identity</span>
@@ -277,7 +304,9 @@ export default function Onboarding() {
                             </div>
                             <h3 style={{ color: 'white', marginBottom: 8, fontSize: 20 }}>Identity Verified!</h3>
                             <p style={{ color: 'var(--text-dim)', fontSize: 14, marginBottom: 32 }}>Welcome aboard, {firstName}!</p>
-                            <button onClick={handleProceedAfterDocs} className="btn-primary" style={{ width: '100%', height: 58, borderRadius: 18, fontSize: 16, fontWeight: 700 }}>Finish Setup</button>
+                            <button onClick={handleProceedAfterDocs} className="btn-primary" style={{ width: '100%', height: 58, borderRadius: 18, fontSize: 16, fontWeight: 700 }}>
+                                {isVerifyMode ? 'Back to Dashboard' : 'Finish Setup'}
+                            </button>
                         </div>
                     ) : (
                         <>
@@ -338,6 +367,7 @@ export default function Onboarding() {
                                 Verify Identity
                             </button>
                             {!isVerifyMode && <button onClick={handleSkipVerification} style={{ width: '100%', color: 'rgba(255,255,255,0.4)', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>Skip for now</button>}
+                            {isVerifyMode && <button onClick={() => nav('/')} style={{ width: '100%', color: 'rgba(255,255,255,0.4)', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>Cancel & Return</button>}
                         </>
                     )}
                 </div>

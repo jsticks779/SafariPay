@@ -168,19 +168,25 @@ export default function Loans() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {eligibility.requirements.map((req: any) => (
-              <div key={req.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', borderRadius: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ color: req.status ? 'var(--success)' : 'var(--text-dim)' }}>
-                    {req.status ? <CheckCircle2 size={16} /> : <Clock size={16} />}
+            {eligibility.requirements.map((req: any) => {
+              // 🛡️ [Pro Guard] Override 'elig_identity' status based on real-time user object
+              const isKycOk = user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved';
+              const isCompleted = req.name === 'elig_identity' ? isKycOk : req.status;
+
+              return (
+                <div key={req.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', borderRadius: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ color: isCompleted ? 'var(--success)' : 'var(--text-dim)' }}>
+                      {isCompleted ? <CheckCircle2 size={16} /> : <Clock size={16} />}
+                    </div>
+                    <span style={{ fontSize: 13, color: isCompleted ? 'var(--white)' : 'var(--text-muted)' }}>{t(req.name)}</span>
                   </div>
-                  <span style={{ fontSize: 13, color: req.status ? 'var(--white)' : 'var(--text-muted)' }}>{t(req.name)}</span>
+                  {!isCompleted && req.target > 0 && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--primary)' }}>{req.current}/{req.target}</span>
+                  )}
                 </div>
-                {!req.status && req.target > 0 && (
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--primary)' }}>{req.current}/{req.target}</span>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div style={{ marginTop: 20, padding: 16, background: 'rgba(59, 130, 246, 0.08)', borderRadius: 16, border: '1px solid rgba(59, 130, 246, 0.2)' }}>
@@ -198,7 +204,8 @@ export default function Loans() {
         <button
           className="btn btn-blue animate-up"
           onClick={() => {
-            if (user?.trust_level !== 'HIGH') {
+            const isKycOk = user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved';
+            if (!isKycOk) {
               toast.error('Identity verification required. Please complete KYC.');
               nav('/onboarding?mode=verify');
             } else if (!isLevel1) {
@@ -213,17 +220,17 @@ export default function Loans() {
             padding: '22px 32px',
             fontSize: 18,
             borderRadius: 24,
-            background: user?.trust_level !== 'HIGH' ? 'rgba(245, 158, 11, 0.1)' : isLevel1 ? 'linear-gradient(135deg, #3b82f6, #6366f1)' : 'rgba(255,255,255,0.05)',
-            border: user?.trust_level !== 'HIGH' ? '1px solid rgba(245, 158, 11, 0.3)' : isLevel1 ? 'none' : '1px solid rgba(255,255,255,0.1)',
-            boxShadow: user?.trust_level !== 'HIGH' ? 'none' : isLevel1 ? '0 12px 30px rgba(59, 130, 246, 0.4)' : 'none',
-            color: user?.trust_level !== 'HIGH' ? '#fbbf24' : isLevel1 ? 'white' : 'rgba(255,255,255,0.3)',
-            cursor: user?.trust_level !== 'HIGH' || isLevel1 ? 'pointer' : 'not-allowed',
+            background: !(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? 'rgba(245, 158, 11, 0.1)' : isLevel1 ? 'linear-gradient(135deg, #3b82f6, #6366f1)' : 'rgba(255,255,255,0.05)',
+            border: !(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? '1px solid rgba(245, 158, 11, 0.3)' : isLevel1 ? 'none' : '1px solid rgba(255,255,255,0.1)',
+            boxShadow: !(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? 'none' : isLevel1 ? '0 12px 30px rgba(59, 130, 246, 0.4)' : 'none',
+            color: !(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? '#fbbf24' : isLevel1 ? 'white' : 'rgba(255,255,255,0.3)',
+            cursor: 'pointer',
             width: '100%',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-          {user?.trust_level !== 'HIGH' ? 'Verify KYC to Unlock Loans' : isLevel1 ? t('borrow_funds') : t('locked')} <ChevronRight size={22} style={{ marginLeft: 8 }} />
+          {!(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? 'Verify KYC to Unlock Loans' : isLevel1 ? t('borrow_funds') : t('locked')} <ChevronRight size={22} style={{ marginLeft: 8 }} />
         </button>
       )}
 

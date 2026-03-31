@@ -18,7 +18,7 @@ export class LoanService {
         // 1. Trust Level Restrictions
         let trustLimit = 0;
         if (user.trust_level === 'MEDIUM') trustLimit = 50000;
-        if (user.trust_level === 'HIGH') trustLimit = 500000;
+        if (user.trust_level === 'HIGH' || user.trust_level === 'Verified') trustLimit = 500000;
 
         // 2. Check P2P count (need >= 3)
         const { rows: tRows } = await pool.query(
@@ -37,7 +37,7 @@ export class LoanService {
         const currentHighEnough = Number(user.balance) >= 2000;
 
         const requirements = [
-            { name: 'elig_identity', status: ['MEDIUM', 'HIGH'].includes(user.trust_level), current: user.trust_level, target: 'MEDIUM' },
+            { name: 'elig_identity', status: ['MEDIUM', 'HIGH', 'Verified'].includes(user.trust_level), current: user.trust_level, target: 'MEDIUM' },
             { name: 'elig_p2p', status: p2pCount >= 3, current: p2pCount, target: 3 },
             { name: 'elig_balance', status: hasHeldLongEnough && currentHighEnough, current: hasHeldLongEnough ? 48 : 0, target: 48 }
         ];

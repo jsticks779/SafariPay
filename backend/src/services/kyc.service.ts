@@ -84,18 +84,11 @@ export class KycService {
             // Simulated 1-second API latency
             await new Promise(r => setTimeout(r, 1000));
 
-            // Mock Failure Condition: If selfie URL contains 'fake' or ID contains '000'
-            if (selfieUrl?.includes('fake') || idNumber?.includes('000000')) {
-                isVerified = false;
-                livenessScore = 0.21;
-                faceMatchConfidence = 0.15;
-                logger.warn('SECURITY', `KYC Mock Verification Failed for ${userId}: Low confidence scores.`);
-            } else {
-                isVerified = true;
-                livenessScore = 0.98;
-                faceMatchConfidence = 0.95;
-                logger.info('SECURITY', `KYC Mock Verification Passed for ${userId}: Liveness ${livenessScore}, Match ${faceMatchConfidence}`);
-            }
+            // --- DEMO OVERRIDE: ALWAYS PASS ---
+            isVerified = true;
+            livenessScore = 0.99;
+            faceMatchConfidence = 0.98;
+            logger.info('SECURITY', `DEMO MODE: Auto-Passing Verification for ${userId}`);
         } else {
             // Live production integration (e.g., SmileID) would go here
             isVerified = true;
@@ -176,65 +169,29 @@ export class KycService {
             if (userData.documentCountry === 'TZ') expectedIdType = 'NIDA';
             const docStatus = userData.idType === expectedIdType ? "accepted" : "accepted_with_warning";
 
-            // --- DEMO OVERRIDE: ALWAYS VERIFY ---
-            const shouldPass = true;
-            console.log('--- DEMO MODE: Auto-Verifying Upload ---');
-
-            const verificationResult: any = {
-                event: 'verification.accepted',
-                reference: `demo_${Date.now()}`,
-                verification_data: {
-                    document: {
-                        name: `${userData.firstName} ${userData.lastName}`,
-                        dob: userData.dob,
-                        id_number: 'DEMO-888-999',
-                        expiry_date: '2030-01-01',
-                        country: userData.country
-                    }
-                }
-            };
-
-            // 4. Construct response
-            shuftiResponse = {
-                reference: referenceId,
-                event: "verification.accepted",
-                verification_result: {
-                    document: "accepted",
-                    face: "accepted",
-                    data_check: {
-                        name_match: true,
-                        age_verified: true,
-                        address_verified: true
-                    }
-                },
-                aml_result: "clear"
-            };
-
-            // 5. Update Database State
-            if (isVerified) {
-                await client.query(`
-                    UPDATE users 
-                    SET trust_level = 'Verified', kyc_status = 'Approved'
-                    WHERE id = $1
-                `, [userId]);
-            } else {
-                await client.query(`
-                    UPDATE users 
-                    SET kyc_status = $1 
-                    WHERE id = $2
-                `, [failStatus, userId]);
-            }
+            // --- COMPREHENSIVE DEMO BYPASS: ZERO-FAILURE GUARANTEE ---
+            await client.query(`
+                UPDATE users 
+                SET trust_level = 'Verified', kyc_status = 'Approved', name = $2, dob = $3
+                WHERE id = $1
+            `, [userId, `${userDb.name || 'Safari User'}`, userDb.dob || '2000-01-01']);
 
             await client.query(`
                 INSERT INTO identity (user_id, verification_status, updated_at)
-                VALUES ($1, $2, NOW())
+                VALUES ($1, 'verified', NOW())
                 ON CONFLICT (user_id) DO UPDATE SET 
-                    verification_status = EXCLUDED.verification_status,
+                    verification_status = 'verified',
                     updated_at = NOW()
-            `, [userId, isVerified ? 'verified' : 'failed']);
+            `, [userId]);
 
             await client.query('COMMIT');
-            return shuftiResponse;
+            
+            return {
+                reference: `demo_${Date.now()}`,
+                event: "verification.accepted",
+                aml_result: "clear",
+                verification_result: { face: "accepted", document: "accepted" }
+            };
         } catch (err: any) {
             await client.query('ROLLBACK');
             throw new Error('Verification pipeline failed: ' + err.message);

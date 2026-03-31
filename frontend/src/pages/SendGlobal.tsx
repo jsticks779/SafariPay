@@ -160,13 +160,16 @@ export default function SendGlobal() {
             <div className="card" style={{ maxWidth: 400, margin: '0 auto 40px', textAlign: 'left' }}>
                 <div style={{ padding: '16px 0', borderBottom: '1px solid var(--glass-border)' }}>
                     <p style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 4, textTransform: 'uppercase', fontWeight: 600 }}>Global Recipient</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <span style={{ fontSize: 24 }}>{country.flag}</span>
-                        <div>
-                            <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--white)' }}>{phone}</p>
-                            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{country.label}</p>
-                        </div>
-                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? (
+                <>
+                  <ShieldCheck size={16} color="var(--success)" />
+                  <span style={{ fontSize: 13, color: 'var(--success)', fontWeight: 700 }}>Verified</span>
+                </>
+              ) : (
+                <span style={{ fontSize: 13, color: '#f59e0b', fontWeight: 700 }}>Pending KYC</span>
+              )}
+            </div>
                 </div>
 
                 <div style={{ padding: '16px 0', borderBottom: '1px solid var(--glass-border)' }}>
@@ -329,7 +332,8 @@ export default function SendGlobal() {
                         className="btn btn-blue"
                         disabled={!phone || !amount || Number(amount) <= 0}
                         onClick={() => {
-                            if (user?.trust_level !== 'HIGH') {
+                            const isKycOk = user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved';
+                            if (!isKycOk) {
                                 toast.error('Identity verification required. Please complete KYC.');
                                 nav('/onboarding?mode=verify');
                                 return;
@@ -338,13 +342,13 @@ export default function SendGlobal() {
                         }}
                         style={{
                             marginTop: 8,
-                            background: user?.trust_level !== 'HIGH' ? 'rgba(245, 158, 11, 0.1)' : 'var(--primary)',
-                            border: user?.trust_level !== 'HIGH' ? '1px solid rgba(245, 158, 11, 0.3)' : 'none',
-                            color: user?.trust_level !== 'HIGH' ? '#fbbf24' : 'white',
-                            boxShadow: user?.trust_level !== 'HIGH' ? 'none' : '0 10px 25px rgba(59, 130, 246, 0.3)'
+                            background: !(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? 'rgba(245, 158, 11, 0.1)' : 'var(--primary)',
+                            border: !(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? '1px solid rgba(245, 158, 11, 0.3)' : 'none',
+                            color: !(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? '#fbbf24' : 'white',
+                            boxShadow: !(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? 'none' : '0 10px 25px rgba(59, 130, 246, 0.3)'
                         }}
                     >
-                        {user?.trust_level !== 'HIGH' ? 'Verify KYC to Continue' : 'Continue'} <ChevronRight size={18} style={{ marginLeft: 6 }} />
+                        {!(user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved') ? 'Verify KYC to Continue' : 'Continue'} <ChevronRight size={18} style={{ marginLeft: 6 }} />
                     </button>
                 </div>
             )}

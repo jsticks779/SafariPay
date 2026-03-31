@@ -28,7 +28,9 @@ import {
     Globe2,
     Smartphone,
     ArrowDownLeft,
-    Loader2
+    Loader2,
+    ShieldCheck,
+    AlertCircle
 } from 'lucide-react';
 
 type Tab = 'overview' | 'transactions' | 'qr' | 'staff' | 'keys' | 'settlement';
@@ -72,8 +74,14 @@ export default function MerchantDashboard() {
     ];
 
     const isStaff = user?.account_type === 'merchant_staff';
+    const isKycOk = user?.trust_level === 'Verified' || user?.trust_level === 'HIGH' || (user as any).kyc_status === 'Approved' || (user as any).kyc_status === 'verified';
 
     const copyText = (text: string, label: string) => {
+        if (!isKycOk) {
+            toast.error(language === 'SW' ? 'Thibitisha utambulisho kutumia API' : 'Verification required to enable API access');
+            nav('/onboarding?mode=verify');
+            return;
+        }
         navigator.clipboard.writeText(text);
         setCopied(label);
         toast.success(t('copied'));
@@ -81,6 +89,11 @@ export default function MerchantDashboard() {
     };
 
     const handleSettle = async () => {
+        if (!isKycOk) {
+            toast.error(language === 'SW' ? 'Thibitisha utambulisho kutoa fedha' : 'Identity verification required for settlements');
+            nav('/onboarding?mode=verify');
+            return;
+        }
         setSettling(true);
         try {
             await new Promise(r => setTimeout(r, 1500)); // Simulate L2 bridge delay
@@ -94,10 +107,20 @@ export default function MerchantDashboard() {
     };
 
     const handlePrintQR = () => {
+        if (!isKycOk) {
+            toast.error(language === 'SW' ? 'Thibitisha utambulisho kuchapa QR' : 'Complete KYC to print store materials');
+            nav('/onboarding?mode=verify');
+            return;
+        }
         toast.success(language === 'SW' ? 'QR imetumwa kwa printer...' : 'QR sent to printer...');
     };
 
     const handleSmsLink = () => {
+        if (!isKycOk) {
+            toast.error(language === 'SW' ? 'Thibitisha utambulisho kutuma link' : 'Complete KYC to generate payment links');
+            nav('/onboarding?mode=verify');
+            return;
+        }
         if (!dynamicAmount || Number(dynamicAmount) <= 0) {
             return toast.error(language === 'SW' ? 'Ingiza kiasi kwanza' : 'Enter amount first');
         }
@@ -107,6 +130,11 @@ export default function MerchantDashboard() {
     };
 
     const handleInvoice = () => {
+        if (!isKycOk) {
+            toast.error(language === 'SW' ? 'Thibitisha utambulisho kutoa ankara' : 'Complete KYC to generate invoices');
+            nav('/onboarding?mode=verify');
+            return;
+        }
         if (!dynamicAmount || Number(dynamicAmount) <= 0) {
             return toast.error(language === 'SW' ? 'Ingiza kiasi kwanza' : 'Enter amount first');
         }
@@ -114,6 +142,11 @@ export default function MerchantDashboard() {
     };
 
     const handleAddStaff = () => {
+        if (!isKycOk) {
+            toast.error(language === 'SW' ? 'Thibitisha utambulisho kuongeza wafanyakazi' : 'Verified merchants only can add staff');
+            nav('/onboarding?mode=verify');
+            return;
+        }
         if (!staffPhone || staffPhone.length < 10) {
             return toast.error(language === 'SW' ? 'Namba si sahihi' : 'Enter a valid phone number');
         }
@@ -133,7 +166,8 @@ export default function MerchantDashboard() {
                     color: activeTab === id ? 'var(--primary)' : 'var(--text-muted)',
                     border: `1px solid ${activeTab === id ? 'rgba(59, 130, 246, 0.2)' : 'transparent'}`,
                     cursor: 'pointer', transition: '0.2s', fontWeight: 700, fontSize: 13,
-                    boxShadow: activeTab === id ? '0 10px 20px rgba(0,0,0,0.2)' : 'none'
+                    boxShadow: activeTab === id ? '0 10px 20px rgba(0,0,0,0.2)' : 'none',
+                    opacity: (!isKycOk && (id === 'settlement' || id === 'keys' || id === 'staff')) ? 0.4 : 1
                 }}
             >
                 {icon} {label}
@@ -168,7 +202,14 @@ export default function MerchantDashboard() {
                             <p style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                 {isStaff ? t('store_operator') : t('merchant_node')}
                             </p>
-                            <h2 style={{ fontSize: 18, fontWeight: 800, color: 'white' }}>{user?.name}</h2>
+                            <h2 style={{ fontSize: 18, fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {user?.name}
+                                {isKycOk ? (
+                                    <ShieldCheck size={16} color="#10b981" />
+                                ) : (
+                                    <AlertCircle size={16} color="#f59e0b" />
+                                )}
+                            </h2>
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>

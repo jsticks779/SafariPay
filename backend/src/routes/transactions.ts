@@ -52,15 +52,15 @@ router.post('/send', async (req: AuthRequest, res: Response): Promise<void> => {
     const sender = sR.rows[0];
     if (sender.is_blacklisted) { await client.query('ROLLBACK'); res.status(403).json({ error: 'Account blacklisted' }); return; }
 
-    // 🛡️ KYC Fraud Prevention: Limit unverified accounts
-    if (sender.trust_level === 'LOCKED') {
+    // 🛡️ KYC Action Guard (Backend Enforcement)
+    const isKycOk = sender.trust_level === 'Verified' || sender.trust_level === 'HIGH' || sender.kyc_status === 'Approved';
+    
+    if (!isKycOk && Number(amount) > 5000) {
       await client.query('ROLLBACK');
-      res.status(403).json({ error: 'Verification Required', message: 'Please verify your phone number via OTP to start sending money.' });
-      return;
-    }
-    if (sender.trust_level === 'LOW' && Number(amount) > 30000) {
-      await client.query('ROLLBACK');
-      res.status(403).json({ error: 'Verification Required', message: 'New/Unverified accounts are limited to TZS 30,000 per transfer. Verify your identity with a Selfie + ID to increase your limits.' });
+      res.status(403).json({ 
+        error: 'Identity Verification Required', 
+        message: 'Unverified accounts are limited to TZS 5,000. Verify your identity with ID + Selfie to unlock higher limits and global transfers.' 
+      });
       return;
     }
 

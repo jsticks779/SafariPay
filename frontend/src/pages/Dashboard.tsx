@@ -23,7 +23,8 @@ import {
   ShieldCheck,
   PlusCircle,
   RefreshCw,
-  Loader2
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -152,6 +153,8 @@ export default function Dashboard() {
     </div>
   );
 
+  const isKycOk = user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved';
+
   return (
     <div style={{ padding: '24px 20px', paddingBottom: 120 }} className="animate-fade">
 
@@ -200,8 +203,14 @@ export default function Dashboard() {
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--white)' }}>
               {user?.name?.split(' ')[0]}
             </h1>
-            {user?.account_type === 'merchant' && (
-              <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(59, 130, 246, 0.2)', color: 'var(--primary)', padding: '4px 8px', borderRadius: 8 }}>MERCHANT</span>
+            {(user?.trust_level === 'Verified' || user?.trust_level === 'HIGH' || (user as any).kyc_status === 'Approved') ? (
+                <span style={{ fontSize: 9, fontWeight: 800, background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '3px 8px', borderRadius: 8, letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <ShieldCheck size={10} /> ELITE VERIFIED
+                </span>
+            ) : (
+                <span style={{ fontSize: 9, fontWeight: 800, background: 'rgba(245, 158, 11, 0.1)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.2)', padding: '3px 8px', borderRadius: 8, letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <AlertCircle size={10} /> KYC REQUIRED
+                </span>
             )}
           </div>
         </div>
@@ -344,21 +353,58 @@ export default function Dashboard() {
           {/* Quick Actions */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8, marginBottom: 32 }} className="animate-up">
             {[
-              { icon: ArrowUpRight, label: t('send'), path: '/send', color: '#3b82f6' },
-              { icon: ArrowDownLeft, label: t('deposit') || 'Deposit', path: '/receive', color: '#10b981' },
-              { icon: RefreshCw, label: t('request') || 'Request', path: '/request-money', color: '#8b5cf6' },
-              { icon: ArrowDownRight, label: t('withdraw'), path: '/withdraw', color: '#f59e0b' },
-              { icon: Banknote, label: t('loans'), path: '/loans', color: '#6366f1' },
-            ].map((a, i) => (
-              <button key={i} onClick={() => nav(a.path)}
-                className="btn-hover-card"
-                style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', borderRadius: 16, padding: '16px 4px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer', transition: 'all 0.2s' }}>
-                <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: a.color }}>
-                  <a.icon size={20} />
-                </div>
-                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'center' }}>{a.label}</span>
-              </button>
-            ))}
+              { icon: ArrowUpRight, label: t('send'), path: '/send', color: '#3b82f6', kyc: true },
+              { icon: ArrowDownLeft, label: t('deposit') || 'Deposit', path: '/receive', color: '#10b981', kyc: false },
+              { icon: RefreshCw, label: t('request') || 'Request', path: '/request-money', color: '#8b5cf6', kyc: true },
+              { icon: ArrowDownRight, label: t('withdraw'), path: '/withdraw', color: '#f59e0b', kyc: true },
+              { icon: Banknote, label: t('loans'), path: '/loans', color: '#6366f1', kyc: true },
+            ].map((a, i) => {
+              const isKycOk = user?.trust_level === 'HIGH' || user?.trust_level === 'Verified' || (user as any).kyc_status === 'Approved';
+              const isLocked = a.kyc && !isKycOk;
+
+              return (
+                <button key={i} 
+                  onClick={() => {
+                    if (isLocked) {
+                      toast.error('Identity Verification Required');
+                      nav('/onboarding?mode=verify');
+                    } else {
+                      nav(a.path);
+                    }
+                  }}
+                  className="btn-hover-card"
+                  style={{ 
+                    background: 'var(--glass)', 
+                    border: '1px solid var(--glass-border)', 
+                    borderRadius: 16, 
+                    padding: '16px 4px', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    gap: 8, 
+                    cursor: 'pointer', 
+                    transition: 'all 0.2s',
+                    opacity: isLocked ? 0.4 : 1,
+                    filter: isLocked ? 'grayscale(0.8)' : 'none',
+                  }}>
+                  <div style={{ 
+                    width: 40, 
+                    height: 40, 
+                    borderRadius: 12, 
+                    background: 'rgba(255,255,255,0.04)', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    color: a.color,
+                    position: 'relative'
+                  }}>
+                    <a.icon size={20} />
+                    {isLocked && <ShieldCheck size={10} style={{ position: 'absolute', top: -2, right: -2, color: '#f59e0b' }} />}
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'center' }}>{a.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Active Loan Widget */}

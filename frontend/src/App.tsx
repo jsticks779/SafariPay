@@ -25,7 +25,6 @@ import Onboarding from './pages/Onboarding';
 import KycBanner from './components/KycBanner';
 import { Loader2, WifiOff, Globe } from 'lucide-react';
 
-import MerchantDashboard from './pages/MerchantDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 
 function Shell() {
@@ -52,7 +51,6 @@ function Shell() {
       </div>
     </div>
   );
-  const isMerchant = user?.account_type === 'merchant';
   const isOnboarding = location.pathname === '/onboarding';
 
   const renderContent = () => {
@@ -93,8 +91,7 @@ function Shell() {
       <>
         {!isOnboarding && user.is_active && <KycBanner />}
         <Routes>
-          <Route path="/" element={isMerchant ? <Navigate to="/merchant" replace /> : <Dashboard />} />
-          <Route path="/merchant" element={isMerchant ? <MerchantDashboard /> : <Navigate to="/" replace />} />
+          <Route path="/" element={<Dashboard />} />
           <Route path="/send" element={<SendMoney />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/loans" element={<Loans />} />

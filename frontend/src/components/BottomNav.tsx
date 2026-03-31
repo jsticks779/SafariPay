@@ -10,10 +10,8 @@ export default function BottomNav() {
   const { t } = useLanguage();
   const { user } = useAuth();
 
-  const isMerchant = user?.account_type === 'merchant';
-
   const ITEMS = [
-    { icon: Home, label: t('home') || 'Home', path: isMerchant ? '/merchant' : '/' },
+    { icon: Home, label: t('home') || 'Home', path: '/' },
     { icon: Send, label: t('send'), path: '/send' },
     { icon: ClipboardList, label: t('transactions'), path: '/transactions' },
     { icon: Wallet, label: t('loans'), path: '/loans' },

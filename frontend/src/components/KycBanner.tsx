@@ -12,8 +12,8 @@ export default function KycBanner() {
     const { user } = useAuth();
     const nav = useNavigate();
 
-    // DEBUG: Set to true to always show banner
-    const FORCE_SHOW = true;
+    // Debug flag (set to false for production)
+    const FORCE_SHOW = false;
 
     // Only show if user is NOT verified
     if (!user) return null;
@@ -23,6 +23,8 @@ export default function KycBanner() {
     const isVerified = 
         u.kyc_status === 'verified' || 
         u.kyc_status === 'Approved' || 
+        u.trust_level === 'Verified' || 
+        u.trust_level === 'HIGH' ||
         u.verification_status === 'verified';
 
     if (isVerified && !FORCE_SHOW) return null;
