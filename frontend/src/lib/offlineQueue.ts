@@ -34,72 +34,90 @@ export function queueOfflineTransaction(url: string, payload: any) {
     toast.success('Transaction saved offline. Will sync when internet returns!');
 }
 
+let isSyncing = false;
+
 export async function flushOfflineQueue(refreshCallback?: () => void) {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine || isSyncing) return;
 
     let queue: OfflineJob[] = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]');
     if (queue.length === 0) return;
 
     // Filter only pending or previous failed attempts
     const pendingJobs = queue.filter(j => j.status === 'pending' || j.status === 'failed');
-    if (pendingJobs.length === 0) return;
-
-    console.log(`📡 [OFFLINE SYNC] Attempting to sync ${pendingJobs.length} transactions...`);
-    let syncCount = 0;
-
-    for (let job of queue) {
-        if (job.status === 'synced') continue;
-
-        job.status = 'syncing';
-        localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
-
-        try {
-            const res = await api.post(job.url, job.payload);
-            job.status = 'synced';
-            syncCount++;
-
-            // SPECIAL CASE: If this was a registration, we got a token back!
-            if (job.url.includes('/auth/register') && res.data?.data?.token) {
-                const { user, token } = res.data.data;
-                localStorage.setItem('sp_token', token);
-                localStorage.setItem('sp_user', JSON.stringify(user));
-                console.log('🔑 [OFFLINE SYNC] Registration synced & user authenticated');
-            }
-
-            console.log(`✅ [OFFLINE SYNC] Job ${job.id} synced successfully`);
-        } catch (e: any) {
-            job.status = 'failed';
-            job.error = e.response?.data?.error || e.message || 'Unknown error';
-            console.error(`❌ [OFFLINE SYNC] Job ${job.id} failed:`, job.error);
-            // If it's a 4xx error, it's a conflict/bad request, we don't retry automatically
-            // If it's 5xx or network, it will remain as 'failed' and retry next time
-        }
-
-        localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+    if (pendingJobs.length === 0) {
+        // Clean up any stray synced items
+        const remaining = queue.filter(j => j.status !== 'synced');
+        localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(remaining));
+        return;
     }
 
-    // After a pass, we can clean up 'synced' items or keep them for history
-    const remaining = queue.filter(j => j.status !== 'synced');
-    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(remaining));
+    isSyncing = true;
+    console.log(`📡 [OFFLINE SYNC] Starting sync cycle for ${pendingJobs.length} transactions...`);
+    let syncCount = 0;
 
-    if (syncCount > 0) {
-        toast.success(`Synced ${syncCount} transactions from offline storage!`, { icon: '🔄' });
-        if (refreshCallback) refreshCallback();
+    try {
+        for (let job of queue) {
+            if (job.status === 'synced' || job.status === 'syncing') continue;
+
+            job.status = 'syncing';
+            localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+
+            try {
+                // IMPORTANT: We use a POST request. The backend SHOULD handle idempotency via client_ref
+                const res = await api.post(job.url, job.payload);
+                job.status = 'synced';
+                syncCount++;
+
+                if (job.url.includes('/auth/register') && res.data?.data?.token) {
+                    const { user, token } = res.data.data;
+                    localStorage.setItem('sp_token', token);
+                    localStorage.setItem('sp_user', JSON.stringify(user));
+                }
+
+                console.log(`✅ [OFFLINE SYNC] Job ${job.id} synced`);
+            } catch (e: any) {
+                job.status = 'failed';
+                job.error = e.response?.data?.error || e.message || 'Unknown error';
+                console.error(`❌ [OFFLINE SYNC] Job ${job.id} failed:`, job.error);
+                
+                // Stop syncing further if we hit a serious error (except 409/400)
+                if (e.response?.status >= 500) break;
+            }
+
+            localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+        }
+
+        // Cleanup
+        const remaining = queue.filter(j => j.status !== 'synced');
+        localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(remaining));
+
+        if (syncCount > 0) {
+            toast.success(`Synced ${syncCount} transactions!`, { icon: '🔄' });
+            if (refreshCallback) refreshCallback();
+        }
+    } finally {
+        isSyncing = false;
+        console.log('🏁 [OFFLINE SYNC] Cycle complete.');
     }
 }
 
 export function initOfflineSync() {
+    // Only register once
+    if ((window as any).__sp_sync_init) return;
+    (window as any).__sp_sync_init = true;
+
     window.addEventListener('online', () => {
-        console.log('🌐 Internet is back! Starting background sync...');
+        console.log('🌐 Online! Syncing...');
         flushOfflineQueue();
     });
 
-    // Check immediately if we have pending stuff
+    // Check immediately
     if (navigator.onLine) {
         flushOfflineQueue();
     }
 }
 
 export function getOfflineTransactions(): OfflineJob[] {
-    return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]');
+    const queue: OfflineJob[] = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]');
+    return queue.filter(j => j.status === 'pending' || j.status === 'failed');
 }

@@ -48,9 +48,15 @@ export class OtpService {
                     metadata = $4
             `, [phone, code_hash, expires_at, JSON.stringify(metadata)]);
 
-            // Simulate sending SMS via the gateway
+            // Simulate sending SMS & Email via the gateway (for simulation visibility on both tabs)
             const message = `${purpose}: Your SafariPay security code is ${code}. It expires in ${OTP_TTL_MINUTES} minutes. DO NOT share this with anyone.`;
-            await SmsService.sendSms(phone, message, 'OTP');
+            
+            // Log to BOTH SMS and Email channels so the virtual phone picks it up in both locations
+            await Promise.all([
+                SmsService.sendSms(phone, message, 'OTP'),
+                SmsService.sendEmail(phone, message, 'OTP', 'SafariPay Security')
+            ]);
+
 
             await client.query('COMMIT');
             logger.info('SECURITY', `OTP sent to ${phone}`);

@@ -596,13 +596,13 @@ export class AuthController {
 
             // 3. Give 0.20 USDT Welcome Reward (Converted to Local Reality)
             if (Number(user.reward_balance || 0) === 0) {
-                const amount = 500; // 0.20 USDT equivalent (Platform Base: TZS)
+                const amount = 1000; // Increased for higher demo impact
                 const rewardCurrency = user.currency || 'TZS';
 
                 await pool.query('UPDATE users SET reward_balance = $1 WHERE id=$2', [amount, req.user.id]);
                 await pool.query(
                     `INSERT INTO transactions (receiver_id, receiver_phone, amount, type, status, description)
-                     VALUES ($1, $2, $3, 'top_up', 'completed', 'Welcome Fee Credit (Makato)')`,
+                     VALUES ($1, $2, $3, 'top_up', 'completed', 'Welcome Reward (SafariPay)')`,
                     [req.user.id, user.phone, amount]
                 );
 

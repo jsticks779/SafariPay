@@ -533,7 +533,7 @@ router.post('/external', async (req: AuthRequest, res: Response): Promise<void> 
       res.status(400).json({ error: 'Security PIN required to authorize transfer' }); return;
     }
 
-    const { rows: uR } = await pool.query('SELECT balance, phone, pin_hash, encrypted_private_key FROM users WHERE id=$1', [req.user!.id]);
+    const { rows: uR } = await pool.query('SELECT id, balance, phone, name, currency, pin_hash, encrypted_private_key FROM users WHERE id=$1', [req.user!.id]);
     const user = uR[0];
 
     const isPinValid = await bcrypt.compare(user_pin.toString(), user.pin_hash);

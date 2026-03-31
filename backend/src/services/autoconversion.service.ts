@@ -32,6 +32,14 @@ export class AutoConversionService {
             const user = uRows[0];
 
             for (const token of this.SUPPORTED_TOKENS) {
+                const provider = BlockchainService.getProvider();
+                const code = await provider.getCode(token.address);
+                
+                if (code === '0x' || code === '0x0') {
+                    // Contract doesn't exist on this network (common in testnets)
+                    continue; 
+                }
+
                 const contract = BlockchainService.getContract('ERC20', undefined, token.address);
                 const balance = await contract.balanceOf(smartWalletAddress);
 

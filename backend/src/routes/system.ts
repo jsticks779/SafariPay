@@ -5,16 +5,19 @@ import { BlockchainConfig } from '../config/blockchain.config';
 
 const router = Router();
 
-// GET /api/v1/system/sms-logs
-router.get('/sms-logs', async (req, res) => {
-    // Note: getLogs() no longer exists, but for the global route we'll fetch all or just use a generic list
-    // To keep it simple, we'll fetch all recent ones from the store
-    const { rows } = await require('../db/database').default.query(`SELECT recipient_phone as to, message, msg_type as type, channel, created_at as timestamp FROM system_messages ORDER BY created_at DESC LIMIT 100`);
-    res.json(rows);
-});
-
+// GET /api/v1/system/sms-logs/:phone (Specific phone view)
 router.get('/sms-logs/:phone', async (req, res) => {
     res.json(await SmsService.getLogsByPhone(req.params.phone));
+});
+
+// GET /api/v1/system/sms-logs (Global Hub - Dedicated for main admin view only)
+router.get('/sms-logs', async (req, res) => {
+    // Explicitly check if what was requested was meant to be a phone but came in empty
+    if (req.originalUrl.endsWith('/sms-logs/')) {
+        return res.json([]);
+    }
+    const { rows } = await require('../db/database').default.query(`SELECT recipient_phone as to, message, msg_type as type, channel, created_at as timestamp FROM system_messages ORDER BY created_at DESC LIMIT 100`);
+    res.json(rows);
 });
 
 // DELETE /api/v1/system/sms-logs (Clean up)

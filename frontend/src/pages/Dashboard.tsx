@@ -123,10 +123,11 @@ export default function Dashboard() {
     if (item.type === 'loan_disbursement') return item.description || t('loan_disbursement');
 
     if (item.type === 'deposit' || item.type === 'top_up') {
+      if (item.description?.includes('Welcome Reward')) return 'SafariPay (Welcome)';
       const match = item.description?.match(/via\s+([a-zA-Z0-9\s-]+)|([a-zA-Z0-9\s-]+)\s+Deposit/i);
       const network = match ? (match[1] || match[2]) : 'Mobile Money';
       const isMobile = item.sender_phone && item.sender_phone !== 'SAFARIPAY' && item.sender_phone !== network;
-      return isMobile ? `Deposited from ${network} (${item.sender_phone})` : `Deposited from ${network}`;
+      return isMobile ? `${t('deposited_from')} ${network} (${item.sender_phone})` : `${t('deposited_from')} ${network}`;
     }
 
     if (item.type === 'withdrawal') {
@@ -295,13 +296,13 @@ export default function Dashboard() {
             )}
           </button>
 
-          <button onClick={() => nav('/ussd')}
+          <button onClick={() => nav(`/phone/${encodeURIComponent(user?.phone || 'global')}`)}
             style={{
               width: 44, height: 44, borderRadius: 14,
               background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--success)', position: 'relative'
             }}>
-            <span style={{ fontSize: 8, fontWeight: 800, position: 'absolute', top: -6, left: '50%', transform: 'translateX(-50%)', background: 'var(--success)', color: 'white', padding: '2px 5px', borderRadius: 6, letterSpacing: '0.5px' }}>OFFLINE</span>
+            <span style={{ fontSize: 8, fontWeight: 800, position: 'absolute', top: -6, left: '50%', transform: 'translateX(-50%)', background: 'var(--success)', color: 'white', padding: '2px 5px', borderRadius: 6, letterSpacing: '0.5px' }}>SANDBOX</span>
             <Smartphone size={18} />
           </button>
 

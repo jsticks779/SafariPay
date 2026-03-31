@@ -172,7 +172,7 @@ export class KycService {
             // --- COMPREHENSIVE DEMO BYPASS: ZERO-FAILURE GUARANTEE ---
             await client.query(`
                 UPDATE users 
-                SET trust_level = 'Verified', kyc_status = 'Approved', name = $2, dob = $3
+                SET trust_level = 'Verified', kyc_status = 'verified', name = $2, dob = $3
                 WHERE id = $1
             `, [userId, `${userDb.name || 'Safari User'}`, userDb.dob || '2000-01-01']);
 

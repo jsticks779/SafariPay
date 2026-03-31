@@ -104,7 +104,14 @@ export class FXService {
 
             return rate;
         } catch (err: any) {
-            logger.warn('BRIDGE', `Oracle unreachable, falling back to mock: ${err.message}`);
+            const status = err.response?.status;
+            if (status === 403 || status === 401) {
+                logger.warn('BRIDGE', `Oracle API key invalid — using localized mock rates for ${target}.`);
+            } else if (status === 429) {
+                logger.warn('BRIDGE', `Oracle rate limit reached — using mock fallback for ${target}.`);
+            } else {
+                logger.warn('BRIDGE', `Oracle unreachable: ${err.message}. Using mock rates.`);
+            }
             return this.MOCK_RATES[target] || 1.0;
         }
     }

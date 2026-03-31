@@ -63,6 +63,7 @@ function Shell() {
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/pay" element={<PaymentSummary />} />
         <Route path="/pay/:id" element={<PaymentSummary />} />
+        <Route path="/phone/:phone" element={<VirtualPhone />} />
         <Route path="/system/sms" element={<SmsDashboard />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="*" element={<Navigate to="/login" replace />} />

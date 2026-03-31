@@ -11,7 +11,8 @@ import {
     Languages,
     ShieldCheck,
     Lock,
-    Loader2
+    Loader2,
+    Smartphone
 } from 'lucide-react';
 import { ALL_COUNTRIES } from '../lib/countries';
 import { validatePhone } from '../lib/validation';
@@ -127,7 +128,21 @@ export default function Register() {
     const nukeNumpad = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'];
 
     return (
-        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 20px', background: 'var(--bg-dark)' }}>
+        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 20px', background: 'var(--bg-dark)', position: 'relative' }}>
+            {/* 📱 Virtual Phone Link for Unregistered Users */}
+            <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 1000 }}>
+                <Link to={phone ? `/phone/${encodeURIComponent(phone)}` : '/system/sms'} target="_blank"
+                    style={{
+                        width: 44, height: 44, borderRadius: 14,
+                        background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--success)',
+                        textDecoration: 'none'
+                    }}>
+                    <span style={{ fontSize: 8, fontWeight: 800, position: 'absolute', top: -6, left: '50%', transform: 'translateX(-50%)', background: 'var(--success)', color: 'white', padding: '2px 5px', borderRadius: 6, letterSpacing: '0.5px' }}>PHONE</span>
+                    <Smartphone size={18} />
+                </Link>
+            </div>
+
             {/* Header */}
             <div style={{ textAlign: 'center', marginBottom: 48 }} className="animate-up">
                 <div style={{ width: 64, height: 64, borderRadius: 20, background: 'linear-gradient(135deg, var(--primary), var(--success))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', margin: '0 auto 16px', boxShadow: '0 10px 30px rgba(59, 130, 246, 0.3)' }}>

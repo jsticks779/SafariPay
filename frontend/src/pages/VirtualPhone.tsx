@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../lib/api';
 import { 
@@ -78,37 +78,39 @@ export default function VirtualPhone() {
         }
     }, [openChat, messages]);
 
+    // Use a ref to track the last seen message ID to prevent duplicate toasts
+    const lastSeenIdRef = useRef<string | null>(null);
+
     useEffect(() => {
         const fetchLogs = async () => {
             try {
-                const { data } = await api.get(`/system/sms-logs/${phone}`);
-                setMessages(data);
+                const { data } = await api.get(`/system/sms-logs/${encodeURIComponent(phone || '')}`);
                 
-                // Initialize cache for all threads on first load so they don't appear as "unread" from the start 
-                // but only count NEW ones that arrive after the app is opened.
-                if (lastMsgCount === 0) {
-                    const initialCache: Record<string, number> = {};
-                    data.forEach((m: MessageLog) => {
-                        const s = (m.sender || 'SAFARIPAY').toUpperCase();
-                        initialCache[s] = (initialCache[s] || 0) + 1;
-                    });
-                    setReadCountCache(initialCache);
-                    setLastMsgCount(data.length);
-                } else if (data.length > lastMsgCount) {
-                    const newMessages = data.slice(0, data.length - lastMsgCount);
-                    const stkMsg = newMessages.find((m: MessageLog) => m.type === 'STK_PUSH');
+                // Track counts for notifications
+                if (data.length > 0) {
+                    const latestMsg = data[0]; // Most recent message from DESC order
                     
-                    if (stkMsg) {
-                        setShowStk(stkMsg);
-                    } else if (newMessages.some((m: MessageLog) => m.channel === 'SMS' || m.channel === 'EMAIL')) {
-                        // Only toast if it's not the currently open chat receiving a new message
-                        const openChatMsgs = newMessages.filter(m => m.channel === 'SMS' && (m.sender || 'SAFARIPAY').toUpperCase() === openChat);
-                        if (openChatMsgs.length !== newMessages.length) {
-                            toast(`New Notification Received!`, { icon: '🔔' });
+                    // Only process notifications if this is a NEW message we haven't seen yet
+                    if (latestMsg.id !== lastSeenIdRef.current) {
+                        
+                        // Priority 1: STK Push (Only pop if it's RECENT, e.g. last 60 seconds)
+                        if (latestMsg.type === 'STK_PUSH') {
+                            const msgTime = new Date(latestMsg.timestamp).getTime();
+                            const now = new Date().getTime();
+                            if ((now - msgTime) < 60000) {
+                                setShowStk(latestMsg);
+                            }
+                        } else if (lastSeenIdRef.current !== null) {
+                            // Priority 2: Routine notifications (Only toast if this isn't the cold-load)
+                            toast(`New Notification Received!`, { icon: '🔔', id: `toast-${latestMsg.id}` });
                         }
+                        
+                        lastSeenIdRef.current = latestMsg.id;
                     }
-                    setLastMsgCount(data.length);
                 }
+                
+                setMessages(data);
+                setLastMsgCount(data.length);
             } catch (e) {
                 console.error("Failed to fetch logs", e);
             }
@@ -117,7 +119,7 @@ export default function VirtualPhone() {
         fetchLogs();
         const interval = setInterval(fetchLogs, 3000);
         return () => clearInterval(interval);
-    }, [phone, lastMsgCount, openChat]);
+    }, [phone]);
 
     const formatTime = (ts: string) => {
         const d = new Date(ts);

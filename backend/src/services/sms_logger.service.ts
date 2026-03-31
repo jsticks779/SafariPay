@@ -75,14 +75,15 @@ class SmsLoggerService {
 
     async getLogsByPhone(phone: string) {
         try {
-            // Clean phone number for consistency
+            // Clean phone number for consistency (e.g., +255-712-345-678 -> 255712345678)
             const cleanPhone = phone.replace(/\D/g, '');
+            
             const { rows } = await this.pool.query(
                 `SELECT id, recipient_phone as to, sender, message, msg_type as type, channel, amount, provider, created_at as timestamp 
                  FROM system_messages 
-                 WHERE recipient_phone LIKE $1 
-                 ORDER BY created_at DESC LIMIT $2`,
-                [`%${cleanPhone}%`, this.maxLogs]
+                 WHERE recipient_phone IN ($1, $2)
+                 ORDER BY created_at DESC LIMIT $3`,
+                [phone.trim(), cleanPhone, this.maxLogs]
             );
             return rows;
         } catch (e) {
