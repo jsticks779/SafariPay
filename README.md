@@ -124,7 +124,6 @@ graph TD
 │   │   │   ├── Dashboard.tsx
 │   │   │   ├── Loans.tsx
 │   │   │   ├── Login.tsx
-│   │   │   ├── MerchantDashboard.tsx
 │   │   │   ├── Onboarding.tsx        # KYC Flow
 │   │   │   ├── PaymentSummary.tsx    # Decentralized Pay Engine
 │   │   │   ├── ReceiveMoney.tsx      # Generates static QR

@@ -13,7 +13,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../hooks/useLanguage';
 import toast from 'react-hot-toast';
 
-type MenuState = 'idle' | 'main' | 'send_phone' | 'send_amount' | 'balance' | 'loans' | 'score' | 'confirm_send' | 'merchant_sales' | 'merchant_accept_phone' | 'merchant_accept_amount' | 'merchant_accept_confirm';
+type MenuState = 'idle' | 'main' | 'send_phone' | 'send_amount' | 'balance' | 'loans' | 'score' | 'confirm_send';
 
 export default function UssdSimulator() {
     const { user, refresh } = useAuth();
@@ -25,12 +25,12 @@ export default function UssdSimulator() {
     const [recipient, setRecipient] = useState('');
     const [amount, setAmount] = useState('');
 
-    const isMerchant = user?.account_type === 'merchant';
+
 
     const dial = () => {
         if (input === '*150#') {
             setState('main');
-            setHistory(['>> Dialing *150#...', `>> Connected to SafariPay ${isMerchant ? 'Merchant' : ''} Gateway`]);
+            setHistory(['>> Dialing *150#...', `>> Connected to SafariPay Gateway`]);
         } else {
             toast.error('Invalid USSD code. Try *150#');
         }
@@ -41,34 +41,18 @@ export default function UssdSimulator() {
         if (choice === '0') { setState('main'); setInput(''); return; }
 
         if (state === 'main') {
-            if (isMerchant) {
-                // Merchant menu: 1=Today Sales, 2=Balance, 3=Accept Payment, 4=Score, 5=Exit
-                if (choice === '1') setState('merchant_sales');
-                else if (choice === '2') setState('balance');
-                else if (choice === '3') setState('merchant_accept_phone');
-                else if (choice === '4') setState('score');
-                else if (choice === '5') { setState('idle'); setHistory([...history, '>> Session closed.']); }
-                else setHistory([...history, `Invalid: ${choice}`]);
-            } else {
-                // Consumer menu
-                if (choice === '1') setState('send_phone');
-                else if (choice === '2') setState('balance');
-                else if (choice === '3') nav('/loans');
-                else if (choice === '4') setState('score');
-                else setHistory([...history, `Invalid: ${choice}`]);
-            }
+            // Consumer menu
+            if (choice === '1') setState('send_phone');
+            else if (choice === '2') setState('balance');
+            else if (choice === '3') nav('/loans');
+            else if (choice === '4') setState('score');
+            else setHistory([...history, `Invalid: ${choice}`]);
         } else if (state === 'send_phone') {
             setRecipient(choice); setState('send_amount');
         } else if (state === 'send_amount') {
             setAmount(choice); setState('confirm_send');
         } else if (state === 'confirm_send') {
             if (choice === '1') executeSend(); else setState('main');
-        } else if (state === 'merchant_accept_phone') {
-            setRecipient(choice); setState('merchant_accept_amount');
-        } else if (state === 'merchant_accept_amount') {
-            setAmount(choice); setState('merchant_accept_confirm');
-        } else if (state === 'merchant_accept_confirm') {
-            if (choice === '1') executeAcceptPayment(); else setState('main');
         }
         setInput('');
     };
@@ -84,11 +68,7 @@ export default function UssdSimulator() {
         }
     };
 
-    const executeAcceptPayment = async () => {
-        setHistory([...history, `>> INVOICE SENT: ${fmt(Number(amount))} to ${recipient}`, '>> Awaiting payment...']);
-        setState('idle');
-        toast.success(language === 'SW' ? `Ankara ya ${fmt(Number(amount))} imetumwa kwa ${recipient}` : `Payment request of ${fmt(Number(amount))} sent to ${recipient}`);
-    };
+
 
     return (
         <div style={{ padding: '24px 20px', paddingBottom: 120 }} className="animate-fade">
@@ -132,26 +112,12 @@ export default function UssdSimulator() {
 
                         {state === 'main' && (
                             <div className="animate-fade">
-                                <p style={{ fontWeight: 700, marginBottom: 8 }}>
-                                    {isMerchant ? (language === 'SW' ? 'MENU YA MFANYABIASHARA:' : 'MERCHANT MENU:') : t('ussd_menu')}
-                                </p>
-                                {isMerchant ? (
-                                    <>
-                                        <p>1. {language === 'SW' ? 'Mauzo ya Leo' : 'Today Sales'}</p>
-                                        <p>2. {t('balance')}</p>
-                                        <p>3. {language === 'SW' ? 'Pokea Malipo' : 'Accept Payment'}</p>
-                                        <p>4. {t('credit_analysis')}</p>
-                                        <p>5. {language === 'SW' ? 'Toka' : 'Exit'}</p>
-                                    </>
-                                ) : (
-                                    <>
-                                        <p>1. {t('send')}</p>
-                                        <p>2. {t('balance')}</p>
-                                        <p>3. {t('loans')}</p>
-                                        <p>4. {t('credit_analysis')}</p>
-                                        <p>5. {language === 'SW' ? 'Toka' : 'Exit'}</p>
-                                    </>
-                                )}
+                                <p style={{ fontWeight: 700, marginBottom: 8 }}>{t('ussd_menu')}</p>
+                                <p>1. {t('send')}</p>
+                                <p>2. {t('balance')}</p>
+                                <p>3. {t('loans')}</p>
+                                <p>4. {t('credit_analysis')}</p>
+                                <p>5. {language === 'SW' ? 'Toka' : 'Exit'}</p>
                                 <p style={{ marginTop: 20 }}>{t('enter_choice')}</p>
                             </div>
                         )}
@@ -182,47 +148,7 @@ export default function UssdSimulator() {
                             </div>
                         )}
 
-                        {/* === MERCHANT: Today Sales === */}
-                        {state === 'merchant_sales' && (
-                            <div className="animate-fade">
-                                <p style={{ fontWeight: 700, borderBottom: '1px solid rgba(0,0,0,0.1)', paddingBottom: 4, marginBottom: 8 }}>
-                                    {language === 'SW' ? 'MAUZO YA LEO' : "TODAY'S SALES"}
-                                </p>
-                                <p style={{ fontSize: 11 }}>{language === 'SW' ? 'Miamala' : 'Transactions'}: <b>12</b></p>
-                                <p style={{ fontSize: 11 }}>{language === 'SW' ? 'Jumla' : 'Total'}: <b>{fmt(340000)}</b></p>
-                                <p style={{ fontSize: 11 }}>{language === 'SW' ? 'Kodi (VAT)' : 'Tax (VAT)'}: <b>{fmt(61200)}</b></p>
-                                <p style={{ fontSize: 11, marginTop: 8 }}>{language === 'SW' ? 'Salio' : 'Balance'}: <b>{fmt(user?.balance || 0)}</b></p>
-                                <p style={{ marginTop: 20 }}>0. {t('dial_0_back')}</p>
-                            </div>
-                        )}
 
-                        {/* === MERCHANT: Accept Payment flow === */}
-                        {state === 'merchant_accept_phone' && (
-                            <div className="animate-fade">
-                                <p style={{ fontWeight: 700 }}>{language === 'SW' ? 'POKEA MALIPO' : 'ACCEPT PAYMENT'}</p>
-                                <p>{language === 'SW' ? 'Ingiza namba ya mteja:' : 'Enter customer phone:'}</p>
-                                <p style={{ fontSize: 10, color: 'rgba(0,0,0,0.6)' }}>Ex: +255 7XX XXX XXX</p>
-                            </div>
-                        )}
-
-                        {state === 'merchant_accept_amount' && (
-                            <div className="animate-fade">
-                                <p>{language === 'SW' ? 'MTEJA' : 'CUSTOMER'}: {recipient}</p>
-                                <p>{language === 'SW' ? 'INGIZA KIASI (TZS):' : 'ENTER AMOUNT (TZS):'}</p>
-                            </div>
-                        )}
-
-                        {state === 'merchant_accept_confirm' && (
-                            <div className="animate-fade">
-                                <p style={{ fontWeight: 700 }}>
-                                    {language === 'SW'
-                                        ? `TUMA ANKARA YA ${fmt(Number(amount))} KWENDA ${recipient}?`
-                                        : `SEND INVOICE OF ${fmt(Number(amount))} TO ${recipient}?`}
-                                </p>
-                                <p style={{ marginTop: 12 }}>{t('yes')}</p>
-                                <p>{t('no')}</p>
-                            </div>
-                        )}
 
                         {state === 'balance' && (
                             <div className="animate-fade">

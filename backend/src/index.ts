@@ -9,7 +9,7 @@ import rateLimit from 'express-rate-limit';
 import { testConnection } from './db/database';
 import { BlockchainService } from './services/blockchain.service';
 import { BlockchainConfig } from './config/blockchain.config';
-import authRoutes from './routes/auth';
+
 import txRoutes from './routes/transactions';
 import loanRoutes from './routes/loans';
 import userRoutes from './routes/users';
