@@ -109,16 +109,34 @@ export default function Transactions() {
     if (tx.type === 'offline_pending') return tx.description || 'Offline Transfer';
     if (tx.type === 'loan_disbursement') return tx.description || t('loan_disbursed');
 
+    if (tx.type === 'deposit' || tx.type === 'top_up') {
+      const match = tx.description?.match(/via\s+([a-zA-Z0-9\s-]+)|([a-zA-Z0-9\s-]+)\s+Deposit/i);
+      const network = match ? (match[1] || match[2]) : 'Mobile Money';
+      const isMobile = tx.sender_phone && tx.sender_phone !== 'SAFARIPAY' && tx.sender_phone !== network;
+      return isMobile ? `Deposited from ${network} (${tx.sender_phone})` : `Deposited from ${network}`;
+    }
+
+    if (tx.type === 'withdrawal') {
+      const match = tx.description?.match(/via\s+([a-zA-Z0-9\s-]+)/i);
+      const network = match ? match[1] : 'External';
+      const isMobile = tx.receiver_phone && tx.receiver_phone !== 'SAFARIPAY';
+      return isMobile ? `Withdrawn to ${network} (${tx.receiver_phone})` : `Withdrawn to ${network}`;
+    }
+
     // System transactions (like Welcome Reward) have null/same sender and receiver
     if (!tx.sender_id || (tx.sender_id === tx.receiver_id && tx.type === 'top_up')) {
       return isIn(tx) ? `${t('from')} SafariPay` : `${t('to')} SafariPay`;
     }
 
-    const other = isIn(tx) ? (tx.sender_name || tx.sender_phone) : (tx.receiver_name || tx.receiver_phone);
-    if (!other) return isIn(tx) ? `${t('from')} SafariPay` : `${t('to')} SafariPay`;
+    const otherName = isIn(tx) ? tx.sender_name : tx.receiver_name;
+    const otherPhone = isIn(tx) ? tx.sender_phone : tx.receiver_phone;
 
-    const firstName = other?.split(' ')[0] || other;
-    return isIn(tx) ? `${t('from')} ${firstName}` : `${t('to')} ${firstName}`;
+    if (!otherName && !otherPhone) return isIn(tx) ? `${t('from')} SafariPay` : `${t('to')} SafariPay`;
+
+    const nameStr = otherName ? otherName.split(' ')[0] : 'User';
+    const detail = otherPhone && otherPhone !== 'SAFARIPAY' ? `${nameStr} (${otherPhone})` : nameStr;
+
+    return isIn(tx) ? `${t('from')} ${detail}` : `${t('to')} ${detail}`;
   };
 
   return (

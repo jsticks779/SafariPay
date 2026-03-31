@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import api from '../lib/api';
 import { 
   Wifi, 
@@ -10,16 +10,16 @@ import {
   Send,
   MoreVertical,
   Bell,
-  CheckCircle2,
   Lock,
   Smartphone,
-  Info
+  Search
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface MessageLog {
     id: string;
     to: string;
+    sender?: string;
     message: string;
     type: 'OTP' | 'TRANSACTION' | 'SYSTEM' | 'SECURITY' | 'STK_PUSH';
     channel: 'SMS' | 'EMAIL' | 'PUSH';
@@ -28,13 +28,51 @@ interface MessageLog {
     provider?: string;
 }
 
+// Color palette for different senders
+const SENDER_COLORS: Record<string, string> = {
+    'SAFARIPAY': '#22c55e',
+    'M-PESA': '#e11d48',
+    'TIGO PESA': '#2563eb',
+    'AIRTEL MONEY': '#dc2626',
+    'HALOPESA': '#7c3aed',
+    'CRDB BANK': '#0891b2',
+    'NMB BANK': '#ca8a04',
+    'NBC BANK': '#059669',
+    'EQUITY BANK': '#9333ea',
+    'KCB BANK': '#0284c7',
+    'VODACOM': '#e11d48',
+    'TIGOPESA': '#2563eb',
+    'PUSH_GW': '#f59e0b',
+};
+
+function getSenderColor(sender: string): string {
+    return SENDER_COLORS[sender?.toUpperCase()] || '#6366f1';
+}
+
+function getSenderInitial(sender: string): string {
+    if (!sender) return '?';
+    const words = sender.split(' ');
+    if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+    return sender.substring(0, 2).toUpperCase();
+}
+
 export default function VirtualPhone() {
     const { phone } = useParams();
-    const nav = useNavigate();
     const [messages, setMessages] = useState<MessageLog[]>([]);
     const [activeTab, setActiveTab] = useState<'lock' | 'sms' | 'email'>('lock');
     const [showStk, setShowStk] = useState<MessageLog | null>(null);
     const [lastMsgCount, setLastMsgCount] = useState(0);
+    const [openChat, setOpenChat] = useState<string | null>(null); // sender name for open thread
+    const [readCountCache, setReadCountCache] = useState<Record<string, number>>({});
+
+    useEffect(() => {
+        if (openChat) {
+            setReadCountCache(prev => ({
+                ...prev,
+                [openChat]: messages.filter(m => m.channel === 'SMS' && (m.sender || 'SAFARIPAY').toUpperCase() === openChat).length
+            }));
+        }
+    }, [openChat, messages]);
 
     useEffect(() => {
         const fetchLogs = async () => {
@@ -42,15 +80,18 @@ export default function VirtualPhone() {
                 const { data } = await api.get(`/system/sms-logs/${phone}`);
                 setMessages(data);
                 
-                // 📱 Better simulation: Check ALL new messages for an STK Push
                 if (data.length > lastMsgCount) {
                     const newMessages = data.slice(0, data.length - lastMsgCount);
-                    const stkMsg = newMessages.find(m => m.type === 'STK_PUSH');
+                    const stkMsg = newMessages.find((m: MessageLog) => m.type === 'STK_PUSH');
                     
                     if (stkMsg) {
                         setShowStk(stkMsg);
-                    } else if (newMessages.some(m => m.channel === 'SMS' || m.channel === 'EMAIL')) {
-                        toast(`New Notification Received!`, { icon: '🔔' });
+                    } else if (newMessages.some((m: MessageLog) => m.channel === 'SMS' || m.channel === 'EMAIL')) {
+                        // Only toast if it's not the currently open chat receiving a new message
+                        const openChatMsgs = newMessages.filter(m => m.channel === 'SMS' && (m.sender || 'SAFARIPAY').toUpperCase() === openChat);
+                        if (openChatMsgs.length !== newMessages.length) {
+                            toast(`New Notification Received!`, { icon: '🔔' });
+                        }
                     }
                     setLastMsgCount(data.length);
                 }
@@ -62,7 +103,7 @@ export default function VirtualPhone() {
         fetchLogs();
         const interval = setInterval(fetchLogs, 3000);
         return () => clearInterval(interval);
-    }, [phone, lastMsgCount]);
+    }, [phone, lastMsgCount, openChat]);
 
     const formatTime = (ts: string) => {
         const d = new Date(ts);
@@ -72,12 +113,34 @@ export default function VirtualPhone() {
     const smsMessages = messages.filter(m => m.channel === 'SMS');
     const emailMessages = messages.filter(m => m.channel === 'EMAIL');
 
+    // Group SMS by sender — like a real phone Messages app
+    const smsThreads = useMemo(() => {
+        const groups: Record<string, MessageLog[]> = {};
+        smsMessages.forEach(msg => {
+            const sender = (msg.sender || 'SAFARIPAY').toUpperCase();
+            if (!groups[sender]) groups[sender] = [];
+            groups[sender].push(msg);
+        });
+        // Sort threads by most recent message
+        return Object.entries(groups)
+            .map(([sender, msgs]) => ({
+                sender,
+                messages: msgs,
+                latestMessage: msgs[0],
+                unread: Math.max(0, msgs.length - (readCountCache[sender] || 0))
+            }))
+            .sort((a, b) => new Date(b.latestMessage.timestamp).getTime() - new Date(a.latestMessage.timestamp).getTime());
+    }, [smsMessages, readCountCache]);
+
     const getIconColor = (tab: typeof activeTab) => {
         if (activeTab === tab) {
             return tab === 'sms' ? '#22c55e' : '#3b82f6';
         }
         return activeTab === 'lock' ? 'white' : '#64748b';
     };
+
+    // Get messages for the currently open chat thread
+    const openChatMessages = openChat ? smsMessages.filter(m => (m.sender || 'SAFARIPAY').toUpperCase() === openChat) : [];
 
     return (
         <div style={{ 
@@ -166,14 +229,15 @@ export default function VirtualPhone() {
                                     }}>
                                         <div style={{ 
                                             width: 36, height: 36, borderRadius: 10, 
-                                            background: msg.channel === 'SMS' ? '#22c55e' : '#3b82f6',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                            background: getSenderColor(msg.sender || 'SAFARIPAY'),
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            fontSize: 11, fontWeight: 800, color: 'white'
                                         }}>
-                                            {msg.channel === 'SMS' ? <MessageCircle size={20} /> : <Mail size={20} />}
+                                            {getSenderInitial(msg.sender || 'SAFARIPAY')}
                                         </div>
                                         <div style={{ flex: 1 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                                                <span style={{ fontSize: 12, fontWeight: 700 }}>{msg.channel === 'SMS' ? 'Messenger' : 'Mail'}</span>
+                                                <span style={{ fontSize: 12, fontWeight: 700 }}>{msg.sender || 'SafariPay'}</span>
                                                 <span style={{ fontSize: 10, opacity: 0.6 }}>now</span>
                                             </div>
                                             <p style={{ fontSize: 12, margin: 0, opacity: 0.9, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
@@ -199,46 +263,138 @@ export default function VirtualPhone() {
                         </div>
                     )}
 
-                    {/* App: SMS */}
-                    {activeTab === 'sms' && (
+                    {/* ========== SMS: Thread List (like real Messages app) ========== */}
+                    {activeTab === 'sms' && !openChat && (
                         <div className="animate-fade" style={{ height: '100%', background: '#f8fafc', color: '#1e293b', display: 'flex', flexDirection: 'column' }}>
-                            <div style={{ padding: '40px 20px 15px', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 15 }}>
-                                <ChevronLeft size={24} onClick={() => setActiveTab('lock')} style={{ cursor: 'pointer' }} />
-                                <div style={{ flex: 1 }}>
-                                    <h3 style={{ margin: 0, fontSize: 16 }}>SafariPay Service</h3>
-                                    <span style={{ fontSize: 11, color: '#64748b' }}>Official Channel</span>
+                            <div style={{ padding: '40px 20px 12px', background: 'white' }}>
+                                <h2 style={{ margin: '0 0 12px', fontSize: 22, fontWeight: 800 }}>Messages</h2>
+                                <div style={{ 
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    background: '#f1f5f9', borderRadius: 12, padding: '8px 12px' 
+                                }}>
+                                    <Search size={16} color="#94a3b8" />
+                                    <span style={{ fontSize: 13, color: '#94a3b8' }}>Search messages</span>
                                 </div>
-                                <MoreVertical size={20} color="#64748b" />
                             </div>
-                            
-                            <div style={{ flex: 1, padding: 15, overflowY: 'auto', display: 'flex', flexDirection: 'column-reverse', gap: 15 }}>
-                                {[...smsMessages].reverse().map(msg => (
-                                    <div key={msg.id} style={{ alignSelf: 'flex-start', maxWidth: '85%' }}>
+
+                            <div style={{ flex: 1, overflowY: 'auto' }}>
+                                {smsThreads.length === 0 && (
+                                    <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
+                                        <MessageCircle size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
+                                        <p style={{ fontSize: 14 }}>No messages yet</p>
+                                    </div>
+                                )}
+                                {smsThreads.map(thread => (
+                                    <div 
+                                        key={thread.sender}
+                                        onClick={() => setOpenChat(thread.sender)}
+                                        style={{ 
+                                            display: 'flex', gap: 12, padding: '14px 20px',
+                                            borderBottom: '1px solid #f1f5f9',
+                                            cursor: 'pointer',
+                                            background: 'white'
+                                        }}
+                                    >
+                                        {/* Sender Avatar */}
+                                        <div style={{ 
+                                            width: 48, height: 48, borderRadius: '50%', 
+                                            background: getSenderColor(thread.sender),
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            color: 'white', fontWeight: 800, fontSize: 14,
+                                            flexShrink: 0
+                                        }}>
+                                            {getSenderInitial(thread.sender)}
+                                        </div>
+                                        {/* Thread Preview */}
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                                                <span style={{ fontSize: 15, fontWeight: 700 }}>{thread.sender}</span>
+                                                <span style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0 }}>{formatTime(thread.latestMessage.timestamp)}</span>
+                                            </div>
+                                            <p style={{ 
+                                                fontSize: 13, color: '#64748b', margin: 0, 
+                                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' 
+                                            }}>
+                                                {thread.latestMessage.message}
+                                            </p>
+                                        </div>
+                                        {/* Unread badge */}
+                                        {thread.unread > 0 && (
+                                            <div style={{ 
+                                                alignSelf: 'center',
+                                                minWidth: 22, height: 22, borderRadius: 11,
+                                                background: getSenderColor(thread.sender),
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                color: 'white', fontSize: 11, fontWeight: 700, flexShrink: 0
+                                            }}>
+                                                {thread.unread}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ========== SMS: Individual Chat Thread ========== */}
+                    {activeTab === 'sms' && openChat && (
+                        <div className="animate-fade" style={{ height: '100%', background: '#f8fafc', color: '#1e293b', display: 'flex', flexDirection: 'column' }}>
+                            {/* Chat Header */}
+                            <div style={{ 
+                                padding: '40px 16px 12px', background: 'white', 
+                                borderBottom: '1px solid #e2e8f0', 
+                                display: 'flex', alignItems: 'center', gap: 12 
+                            }}>
+                                <ChevronLeft size={24} onClick={() => setOpenChat(null)} style={{ cursor: 'pointer', flexShrink: 0 }} />
+                                <div style={{ 
+                                    width: 36, height: 36, borderRadius: '50%', 
+                                    background: getSenderColor(openChat),
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    color: 'white', fontWeight: 800, fontSize: 12, flexShrink: 0
+                                }}>
+                                    {getSenderInitial(openChat)}
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{openChat}</h3>
+                                    <span style={{ fontSize: 11, color: '#64748b' }}>
+                                        {openChat === 'SAFARIPAY' ? 'Official Channel' 
+                                            : openChat.includes('BANK') ? 'Banking Services'
+                                            : 'Mobile Network'}
+                                    </span>
+                                </div>
+                                <MoreVertical size={18} color="#64748b" />
+                            </div>
+
+                            {/* Chat Messages */}
+                            <div style={{ flex: 1, padding: 12, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                <div style={{ textAlign: 'center', margin: '10px 0 5px' }}>
+                                    <span style={{ fontSize: 11, background: '#f1f5f9', padding: '4px 10px', borderRadius: 10, color: '#64748b' }}>
+                                        End-to-End Secured
+                                    </span>
+                                </div>
+                                {[...openChatMessages].reverse().map(msg => (
+                                    <div key={msg.id} style={{ alignSelf: 'flex-start', maxWidth: '88%' }}>
                                         <div style={{ 
                                             background: '#e2e8f0', 
                                             padding: '10px 14px', 
                                             borderRadius: '18px 18px 18px 4px',
                                             fontSize: 13,
-                                            lineHeight: 1.4
+                                            lineHeight: 1.5
                                         }}>
                                             {msg.message}
                                         </div>
-                                        <span style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, display: 'block' }}>{formatTime(msg.timestamp)}</span>
+                                        <span style={{ fontSize: 10, color: '#94a3b8', marginTop: 3, display: 'block', marginLeft: 4 }}>{formatTime(msg.timestamp)}</span>
                                     </div>
                                 ))}
-                                <div style={{ textAlign: 'center', margin: '20px 0' }}>
-                                    <span style={{ fontSize: 11, background: '#f1f5f9', padding: '4px 10px', borderRadius: 10, color: '#64748b' }}>
-                                        Encryption Active
-                                    </span>
-                                </div>
                             </div>
 
-                            <div style={{ padding: 15, background: 'white', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 10 }}>
-                                <div style={{ flex: 1, height: 40, background: '#f1f5f9', borderRadius: 20, padding: '0 15px', display: 'flex', alignItems: 'center', fontSize: 13, color: '#94a3b8' }}>
+                            {/* Bottom Input */}
+                            <div style={{ padding: 12, background: 'white', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 10 }}>
+                                <div style={{ flex: 1, height: 38, background: '#f1f5f9', borderRadius: 20, padding: '0 15px', display: 'flex', alignItems: 'center', fontSize: 13, color: '#94a3b8' }}>
                                     Text Message
                                 </div>
-                                <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-                                    <Send size={18} />
+                                <div style={{ width: 38, height: 38, borderRadius: '50%', background: getSenderColor(openChat), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+                                    <Send size={16} />
                                 </div>
                             </div>
                         </div>
@@ -307,7 +463,7 @@ export default function VirtualPhone() {
                                  </div>
                                  <h3 style={{ fontSize: 20, fontWeight: 800, margin: '0 0 8px' }}>Payment Request</h3>
                                  <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.5 }}>
-                                     <b>{showStk.message.includes('M-Pesa') ? 'Vodacom' : showStk.message.includes('Tigo') ? 'Tigo' : 'Network'}</b> is requesting <b>{showStk.amount?.toLocaleString()} TZS</b> for your SafariPay deposit.
+                                     <b>{showStk.message.includes('M-Pesa') ? 'Vodacom M-Pesa' : showStk.message.includes('Tigo') ? 'Tigo Pesa' : showStk.message.includes('Airtel') ? 'Airtel Money' : showStk.message.includes('Halo') ? 'HaloPesa' : 'Network'}</b> is requesting <b>{showStk.amount?.toLocaleString()} TZS</b> for your SafariPay deposit.
                                  </p>
                                  
                                  <div style={{ margin: '24px 0' }}>
@@ -332,7 +488,6 @@ export default function VirtualPhone() {
                                               const btn = document.activeElement as HTMLButtonElement;
                                               if (btn) btn.innerText = 'Verifying...';
                                               
-                                              // Link to backend confirmation logic (using provider column as txHash store)
                                               await api.post(`/system/confirm-payment/${showStk.provider}`);
                                               
                                               setTimeout(() => {
@@ -366,13 +521,13 @@ export default function VirtualPhone() {
                     alignItems: 'center',
                     paddingBottom: 15
                 }}>
-                    <button onClick={() => setActiveTab('lock')} style={{ background: 'none', border: 'none', color: getIconColor('lock') }}>
+                    <button onClick={() => { setActiveTab('lock'); setOpenChat(null); }} style={{ background: 'none', border: 'none', color: getIconColor('lock') }}>
                         <Lock size={20} />
                     </button>
-                    <button onClick={() => setActiveTab('sms')} style={{ background: 'none', border: 'none', color: getIconColor('sms') }}>
+                    <button onClick={() => { setActiveTab('sms'); setOpenChat(null); }} style={{ background: 'none', border: 'none', color: getIconColor('sms') }}>
                         <MessageCircle size={20} />
                     </button>
-                    <button onClick={() => setActiveTab('email')} style={{ background: 'none', border: 'none', color: getIconColor('email') }}>
+                    <button onClick={() => { setActiveTab('email'); setOpenChat(null); }} style={{ background: 'none', border: 'none', color: getIconColor('email') }}>
                         <Mail size={20} />
                     </button>
                 </div>

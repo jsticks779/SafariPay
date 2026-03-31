@@ -63,7 +63,7 @@ export class UniversalGatewayService {
         try {
             await client.query('BEGIN');
 
-            const { rows: uR } = await client.query('SELECT phone, name, balance, pin_hash, encrypted_private_key, country FROM users WHERE id=$1 FOR UPDATE', [userId]);
+            const { rows: uR } = await client.query('SELECT phone, name, balance, reward_balance, pin_hash, encrypted_private_key, country FROM users WHERE id=$1 FOR UPDATE', [userId]);
             if (!uR.length) throw new Error('User not found');
             const user = uR[0];
 
@@ -105,17 +105,36 @@ export class UniversalGatewayService {
 
             // 3. Deduct from the internal balance (Tier 3)
             const fee = Math.round(amountTzs * 0.01);
-            const totalDeduct = amountTzs + fee;
-            if (user.balance < totalDeduct) throw new Error('Insufficient balance to cover withdrawal fee (1%)');
+            
+            // Fee Credit (Reward/Makato) Logic
+            let feeFromBalance = fee;
+            let rewardUsageTZS = 0;
+            const currentReward = Number(user.reward_balance || 0);
 
-            await client.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [totalDeduct, userId]);
+            if (currentReward > 0) {
+                rewardUsageTZS = Math.min(currentReward, fee);
+                feeFromBalance = fee - rewardUsageTZS;
+            }
+
+            const totalDeduct = amountTzs + feeFromBalance;
+
+            if (user.balance < totalDeduct) {
+                throw new Error(`Insufficient balance to cover withdrawal and remaining fee (${feeFromBalance} TZS)`);
+            }
+
+            await client.query(
+                'UPDATE users SET balance = balance - $1, reward_balance = reward_balance - $2 WHERE id = $3', 
+                [totalDeduct, rewardUsageTZS, userId]
+            );
 
             // Tier 1 execution (Polygon) - Auto-Liquidity unwrapping
+            // FIX: 'withdraw' is not a valid category. Use 'mobile' for off-ramp.
             const unifiedRes = await UnifiedTransferService.execute({
                 userId,
-                category: 'withdraw',
+                category: 'mobile',
                 amount: usdtAmount,
-                recipient: '0x000000000000000000000000000000000000dEaD', // Burn/Treasury return
+                recipient: identifier,
+                provider,
                 description: `Off-ramp to ${provider} ${targetCurrency}`
             });
 
@@ -123,26 +142,47 @@ export class UniversalGatewayService {
             const txHash = unifiedRes.txHash || `WID-${uuidv4().substring(0, 8)}`;
             await client.query(
                 `INSERT INTO transactions(sender_id, receiver_phone, amount, type, status, description, fee, tx_hash)
-                 VALUES ($1, $2, $3, 'local', 'SUCCESS', $4, $5, $6)`,
+                 VALUES ($1, $2, $3, 'withdrawal', 'completed', $4, $5, $6)`,
                 [userId, identifier, amountTzs, `Cash out via ${provider} (${usdtAmount.toFixed(2)} USDT -> ${targetCurrency})`, fee, txHash]
             );
 
             await client.query('COMMIT');
 
-            // 5. [JUDGE DEMO] Multi-Channel Notification Flow
+            // 5. [JUDGE DEMO] Multi-Channel Notification Flow — REALISTIC SENDERS
             const ref = txHash.substring(0, 10).toUpperCase();
             
-            // Notification A: The SafariPay Confirmation
+            // Map provider to realistic sender name
+            const providerSenderMap: Record<string, string> = {
+                'MPESA': 'M-PESA',
+                'TIGOPESA': 'TIGO PESA',
+                'AIRTELMONEY': 'AIRTEL MONEY',
+                'HALOPESA': 'HALOPESA',
+                'CRDB': 'CRDB BANK',
+                'NMB': 'NMB BANK',
+                'NBC': 'NBC BANK',
+                'EQUITY': 'EQUITY BANK',
+                'KCB': 'KCB BANK',
+            };
+            const networkSender = providerSenderMap[provider.toUpperCase()] || provider.toUpperCase();
+
+            // Notification A: SafariPay Confirmation (from SAFARIPAY)
             await SmsService.sendSms(
                 user.phone,
-                `SafariPay: Withdrawal of TZS ${amountTzs.toLocaleString()} to ${identifier} via ${provider} was successful. Fee: ${fee} TZS. Ref: ${ref}. Thank you for using SafariPay!`,
-                'TRANSACTION'
+                `SafariPay: Withdrawal of TZS ${amountTzs.toLocaleString()} to ${identifier} via ${networkSender} was successful. Fee: ${fee} TZS. Ref: ${ref}. Thank you for using SafariPay!`,
+                'TRANSACTION',
+                'SAFARIPAY'
             );
 
-            // Notification B: The Mobile Money / Bank "Received" Message
-            // This mimics the message arriving from the network provider
-            const networkMsg = `${ref} Confirmed. You have received TZS ${amountTzs.toLocaleString()} from SAFARIPAY (${user.name}). Your new ${provider} balance is TZS ...`;
-            await SmsService.sendSms(user.phone, networkMsg, 'TRANSACTION');
+            // Notification B: Network/Bank "Received" Message (from M-PESA / CRDB / etc.)
+            const isBank = ['CRDB', 'NMB', 'NBC', 'EQUITY', 'KCB'].includes(provider.toUpperCase());
+            let networkMsg: string;
+
+            if (isBank) {
+                networkMsg = `${networkSender}: TZS ${amountTzs.toLocaleString()} has been credited to your account from SAFARIPAY (${user.name}). Trans ID: ${ref}. Available Bal: TZS ***. Thank you for banking with ${networkSender}.`;
+            } else {
+                networkMsg = `${ref} Confirmed. You have received TZS ${amountTzs.toLocaleString()} from SAFARIPAY (${user.name}) on your ${networkSender} account. Trans. ID: ${ref}. Thank you for using ${networkSender}.`;
+            }
+            await SmsService.sendSms(user.phone, networkMsg, 'TRANSACTION', networkSender);
 
             return {
                 success: true,
@@ -151,6 +191,7 @@ export class UniversalGatewayService {
                 provider
             };
         } catch (e: any) {
+            console.error(`\n\x1b[31m[WITHDRAW ERROR]\x1b[0m`, e.message, e.detail || '');
             await client.query('ROLLBACK');
             throw e;
         } finally {

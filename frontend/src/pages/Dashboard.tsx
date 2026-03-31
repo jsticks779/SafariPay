@@ -33,7 +33,7 @@ export default function Dashboard() {
   const nav = useNavigate();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [balVis, setBalVis] = useState(true);
+  const [balVis, setBalVis] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [offlineCount, setOfflineCount] = useState(getOfflineTransactions().length);
   const [showRegions, setShowRegions] = useState(false);
@@ -122,18 +122,36 @@ export default function Dashboard() {
   const txLabel = (item: any) => {
     if (item.type === 'loan_disbursement') return item.description || t('loan_disbursement');
 
+    if (item.type === 'deposit' || item.type === 'top_up') {
+      const match = item.description?.match(/via\s+([a-zA-Z0-9\s-]+)|([a-zA-Z0-9\s-]+)\s+Deposit/i);
+      const network = match ? (match[1] || match[2]) : 'Mobile Money';
+      const isMobile = item.sender_phone && item.sender_phone !== 'SAFARIPAY' && item.sender_phone !== network;
+      return isMobile ? `Deposited from ${network} (${item.sender_phone})` : `Deposited from ${network}`;
+    }
+
+    if (item.type === 'withdrawal') {
+      const match = item.description?.match(/via\s+([a-zA-Z0-9\s-]+)/i);
+      const network = match ? match[1] : 'External';
+      const isMobile = item.receiver_phone && item.receiver_phone !== 'SAFARIPAY';
+      return isMobile ? `Withdrawn to ${network} (${item.receiver_phone})` : `Withdrawn to ${network}`;
+    }
+
     // System transactions (like Welcome Reward) have null/same sender and receiver
-    if (!item.sender_id || (item.sender_id === item.receiver_id && item.type === 'top_up')) {
+    if (!item.sender_id) {
       return 'SafariPay';
     }
 
     if (item.description === 'Received from SafariPay' || item.description === 'Welcome Reward') return 'SafariPay';
 
-    const other = isIn(item) ? (item.sender_name || item.sender_phone) : (item.receiver_name || item.receiver_phone);
-    if (!other) return 'SafariPay';
+    const otherName = isIn(item) ? item.sender_name : item.receiver_name;
+    const otherPhone = isIn(item) ? item.sender_phone : item.receiver_phone;
 
-    const name = other?.split(' ')[0] || other;
-    return isIn(item) ? `${t('received_from')} ${name}` : `${t('sent_to')} ${name}`;
+    if (!otherName && !otherPhone) return 'SafariPay';
+
+    const nameStr = otherName ? otherName.split(' ')[0] : 'User';
+    const detail = otherPhone && otherPhone !== 'SAFARIPAY' ? `${nameStr} (${otherPhone})` : nameStr;
+
+    return isIn(item) ? `${t('received_from')} ${detail}` : `${t('sent_to')} ${detail}`;
   };
 
   const sc = user?.credit_score || 0;

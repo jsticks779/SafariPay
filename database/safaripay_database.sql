@@ -62,7 +62,7 @@ CREATE TABLE transactions (
   receiver_phone  VARCHAR(25),
   amount          DECIMAL(18,2) NOT NULL CHECK (amount > 0),
   currency        VARCHAR(5) NOT NULL DEFAULT 'TZS',
-  type            VARCHAR(30) NOT NULL CHECK (type IN ('local','cross_border','loan_disbursement','loan_repayment','top_up')),
+  type            VARCHAR(30) NOT NULL CHECK (type IN ('local','cross_border','loan_disbursement','loan_repayment','top_up','deposit','withdrawal')),
   status          VARCHAR(20) NOT NULL DEFAULT 'completed' CHECK (status IN ('pending','completed','failed','reversed')),
   description     VARCHAR(255),
   tx_hash         VARCHAR(100),

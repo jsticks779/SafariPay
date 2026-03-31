@@ -169,6 +169,17 @@ export class SafariPaymentBridge implements PaymentProvider {
                     `UPDATE users SET balance = balance - $1 WHERE id = $2`,
                     [tzsEquivalent, userId]
                 );
+
+                // 2.1 Mirror to main transactions table
+                await pool.query(
+                    `INSERT INTO transactions (
+                        sender_id, receiver_id, sender_phone, receiver_phone, 
+                        amount, type, status, description, fee, exchange_rate, tx_hash
+                    ) VALUES (
+                        $1, NULL, 'SAFARIPAY', $2, $3, 'withdrawal', 'completed', $4, 0, $5, $6
+                    )`,
+                    [userId, phone, tzsEquivalent, `Withdrawal to ${phone}`, rate, txHash]
+                );
             }
 
             await pool.query('COMMIT');

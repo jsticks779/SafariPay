@@ -41,8 +41,8 @@ router.get('/dashboard', async (req: AuthRequest, res: Response): Promise<void> 
       pool.query("SELECT * FROM loans WHERE user_id=$1 AND status='active' LIMIT 1", [id]),
       pool.query(
         `SELECT
-           COALESCE(SUM(CASE WHEN sender_id=$1 AND type!='loan_disbursement' THEN amount ELSE 0 END),0) as sent,
-           COALESCE(SUM(CASE WHEN receiver_id=$1 AND type!='loan_repayment' AND description NOT LIKE '%Welcome Fee Credit%' THEN amount ELSE 0 END),0) as received,
+           COALESCE(SUM(CASE WHEN sender_id=$1 AND type IN ('local', 'cross_border', 'withdrawal', 'loan_repayment') THEN amount + fee ELSE 0 END),0) as sent,
+           COALESCE(SUM(CASE WHEN receiver_id=$1 AND type IN ('local', 'cross_border', 'top_up', 'deposit', 'loan_disbursement') AND description NOT LIKE '%Welcome Fee Credit%' THEN amount ELSE 0 END),0) as received,
            COUNT(*) as total_txns
          FROM transactions
          WHERE (sender_id=$1 OR receiver_id=$1) AND created_at>=NOW()-INTERVAL '30 days'`, [id]

@@ -160,6 +160,13 @@ router.post('/:id/repay', async (req: AuthRequest, res: Response): Promise<void>
       [loan.id, req.user!.id, amount]
     );
 
+    // [JUDGE DEMO] Mirror to main transactions table
+    await client.query(
+      `INSERT INTO transactions(sender_id, receiver_id, sender_phone, receiver_phone, amount, type, status, description)
+       SELECT id, id, phone, phone, $1, 'local', 'completed', $2 FROM users WHERE id=$3`,
+      [amount, `Loan Repayment: ${loan.id.slice(0, 8)}`, req.user!.id]
+    );
+
     // Anchor Repayment Receipt to IPFS
     const cid = await IPFSService.uploadJSON({ loan_id: loan.id, borrower: req.user!.id, amount_paid: amount, remaining: Math.max(0, totalDue - newPaid) });
     console.log(`📜 [REPAYMENT] Anchored receipt to decentralized data layer: ${cid}`);

@@ -155,8 +155,8 @@ router.post('/send', async (req: AuthRequest, res: Response): Promise<void> => {
     const senderMsg = `SafariPay: Sent TZS ${amount.toLocaleString()} to ${receiver.name || receiver_phone}. Fee: ${fee} TZS. New Balance: TZS ${(sender.balance - total).toLocaleString()}. Ref: ${ref}.`;
     const receiverMsg = `Congratulations! You have received TZS ${Number(amountAfterDebt).toLocaleString()} from ${sender.name}. Ref: ${ref}. SafariPay: Empowering your digital wealth.`;
 
-    await SmsService.sendSms(sender.phone, senderMsg, 'TRANSACTION');
-    await SmsService.sendSms(receiver.phone, receiverMsg, 'TRANSACTION');
+    await SmsService.sendSms(sender.phone, senderMsg, 'TRANSACTION', 'SAFARIPAY');
+    await SmsService.sendSms(receiver.phone, receiverMsg, 'TRANSACTION', 'SAFARIPAY');
 
     await client.query('COMMIT');
 
@@ -345,8 +345,8 @@ router.post('/deposit', async (req: AuthRequest, res: Response): Promise<void> =
     const txHash = await BlockchainService.fundWalletFromTreasury(user.wallet_address, stableAmount);
 
     await pool.query(
-      'INSERT INTO transactions(sender_id, receiver_id, amount, type, status, description, tx_hash) VALUES ($1,$1,$2,$3,$4,$5,$6)',
-      [req.user!.id, amount, 'top_up', 'completed', `${provider || 'M-Pesa'} Deposit (${stableAmount.toFixed(2)} USDT)`, txHash]
+      'INSERT INTO transactions(sender_id, receiver_id, sender_phone, amount, type, status, description, tx_hash) VALUES ($1,$1,$2,$3,$4,$5,$6,$7)',
+      [req.user!.id, phone || user.phone, amount, 'top_up', 'completed', `${provider || 'M-Pesa'} Deposit (${stableAmount.toFixed(2)} USDT)`, txHash]
     );
 
     const client = await pool.connect();
@@ -365,11 +365,17 @@ router.post('/deposit', async (req: AuthRequest, res: Response): Promise<void> =
 
     // 📱 [JUDGE DEMO] Multi-Channel Notifications
     const ref = `SP-${txHash.substring(0, 8).toUpperCase()}`;
-    const networkMsg = `${ref} Confirmed. TZS ${amount.toLocaleString()} received from SAFARIPAY top-up gateway. Ref: ${ref}.`;
-    await SmsService.sendSms(user.phone, networkMsg, 'TRANSACTION');
+    const providerMap: Record<string, string> = {
+      'MPESA': 'M-PESA', 'TIGOPESA': 'TIGO PESA', 'AIRTELMONEY': 'AIRTEL MONEY',
+      'HALOPESA': 'HALOPESA', 'CRDB': 'CRDB BANK', 'NMB': 'NMB BANK',
+    };
+    const networkSender = providerMap[(provider || 'MPESA').toUpperCase()] || (provider || 'M-PESA').toUpperCase();
 
-    const safariMsg = `Congratulations ${user.name}! Your SafariPay account has been credited with TZS ${amount.toLocaleString()} via ${provider || 'Network'}. Your wealth is growing!`;
-    await SmsService.sendSms(user.phone, safariMsg, 'SYSTEM');
+    const networkMsg = `${ref} Confirmed. TZS ${amount.toLocaleString()} was successfully deposited from your ${networkSender} account to SafariPay. Ref: ${ref}.`;
+    await SmsService.sendSms(user.phone, networkMsg, 'TRANSACTION', networkSender);
+
+    const safariMsg = `SafariPay Confirmed: You have received a deposit of TZS ${amount.toLocaleString()} from ${networkSender}. Your balance has been updated!`;
+    await SmsService.sendSms(user.phone, safariMsg, 'SYSTEM', 'SAFARIPAY');
 
     res.json({ message: 'Deposit successful', stableAmount, txHash });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -454,9 +460,9 @@ router.post('/withdraw/crypto', async (req: AuthRequest, res: Response): Promise
 
     await client.query('COMMIT');
 
-    // [JUDGE DEMO] Crypto Notification
+    // [JUDGE DEMO] Crypto Notification — only SafariPay message (no network receipt for crypto)
     const cryptoMsg = `SafariPay: Withdrawal of TZS ${amount_tzs.toLocaleString()} to wallet ${wallet_address.substring(0,6)}...${wallet_address.substring(38)} (${network}) was successful. Ref: ${unifiedRes.txHash?.substring(0,10).toUpperCase()}.`;
-    await SmsService.sendSms(user.phone, cryptoMsg, 'TRANSACTION');
+    await SmsService.sendSms(user.phone, cryptoMsg, 'TRANSACTION', 'SAFARIPAY');
 
     res.json({ message: 'Crypto Withdrawal processed.', txHash: unifiedRes.txHash });
   } catch (e: any) {
@@ -523,17 +529,22 @@ router.post('/external', async (req: AuthRequest, res: Response): Promise<void> 
       [req.user!.id, receiver_id, amount, 'local', `Transfer to ${provider || 'External'}: ${description || ''}`, fee, unifiedRes.txHash || 'PENDING']
     );
 
-    // 📱 [JUDGE DEMO] External Provider Simulation
+    // 📱 [JUDGE DEMO] External Provider Simulation — REALISTIC SENDERS
     const ref = txRows[0].id.substring(0, 10).toUpperCase();
+    const providerSenderMap: Record<string, string> = {
+      'MPESA': 'M-PESA', 'TIGOPESA': 'TIGO PESA', 'AIRTELMONEY': 'AIRTEL MONEY',
+      'HALOPESA': 'HALOPESA', 'CRDB': 'CRDB BANK', 'NMB': 'NMB BANK',
+      'NBC': 'NBC BANK', 'EQUITY': 'EQUITY BANK', 'KCB': 'KCB BANK'
+    };
+    const networkSender = providerSenderMap[(provider || '').toUpperCase()] || (provider || 'Network').toUpperCase();
 
-    // 1. Sender Notification
-    const senderMsg = `SafariPay: Sent TZS ${amount.toLocaleString()} to ${provider} (${receiver_id}) success. Fee: ${fee} TZS. New Balance: TZS ${(user.balance - total).toLocaleString()}. Ref: ${ref}.`;
-    await SmsService.sendSms(user.phone, senderMsg, 'TRANSACTION');
+    // 1. Sender Notification (from SAFARIPAY)
+    const senderMsg = `SafariPay: Sent TZS ${amount.toLocaleString()} to ${networkSender} (${receiver_id}) success. Fee: ${fee} TZS. New Balance: TZS ${(user.balance - total).toLocaleString()}. Ref: ${ref}.`;
+    await SmsService.sendSms(user.phone, senderMsg, 'TRANSACTION', 'SAFARIPAY');
 
-    // 2. Recipient Notification (Simulating Network/Bank)
-    const providerName = provider || 'Network';
-    const networkMsg = `${ref} Confirmed. You have received TZS ${amount.toLocaleString()} from SAFARIPAY (${user.name}). Your new ${providerName} balance is TZS ... SafariPay: Empowering Digital Wealth.`;
-    await SmsService.sendSms(receiver_id, networkMsg, 'TRANSACTION');
+    // 2. Recipient Notification (from actual Network/Bank)
+    const networkMsg = `${ref} Confirmed. You have received TZS ${amount.toLocaleString()} from SAFARIPAY (${user.name}) on your ${networkSender} account. Trans. ID: ${ref}. Thank you for using ${networkSender}.`;
+    await SmsService.sendSms(receiver_id, networkMsg, 'TRANSACTION', networkSender);
 
     res.json({
       transaction: txRows[0],

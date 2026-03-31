@@ -76,6 +76,19 @@ router.post('/confirm-payment/:txHash', async (req, res) => {
             `UPDATE users SET balance = balance + $1 WHERE id = $2`,
             [tx.amount_fiat, tx.user_id]
         );
+
+        // 3.1 Mirror to main transactions table for dashboard visibility
+        const senderLabel = tx.params?.provider || 'Mobile Money';
+        const senderPhoneStr = tx.params?.phone || tx.identifier || senderLabel;
+        await pool.query(
+            `INSERT INTO transactions (
+                sender_id, receiver_id, sender_phone, receiver_phone, 
+                amount, type, status, description, fee, exchange_rate, tx_hash
+            ) VALUES (
+                NULL, $1, $2, $3, $4, 'deposit', 'completed', $5, 0, 1, $6
+            )`,
+            [tx.user_id, senderPhoneStr, 'SAFARIPAY', tx.amount_fiat, `Deposit via ${senderLabel}`, txHash]
+        );
         
         // 4. Send Notifications (The grand finale)
         const { rows: uR } = await pool.query('SELECT name, phone FROM users WHERE id=$1', [tx.user_id]);
@@ -90,10 +103,10 @@ router.post('/confirm-payment/:txHash', async (req, res) => {
             }
 
             // Network confirmation (e.g. from M-PESA or Airtel)
-            await SmsService.sendSms(user.phone, `${txHash} Confirmed. TZS ${amountStr} received from SAFARIPAY. Ref: ${txHash}.`, 'TRANSACTION', networkSender);
-            
+            await SmsService.sendSms(user.phone, `${txHash} Confirmed. TZS ${amountStr} was successfully deposited from your ${networkSender} account to SafariPay. Ref: ${txHash}.`, 'TRANSACTION', networkSender);
+
             // SafariPay congratulations
-            await SmsService.sendSms(user.phone, `Congratulations ${user.name}! Your SafariPay account has been credited with TZS ${amountStr}. Digital currency is now in your hands!`, 'SYSTEM', 'SAFARIPAY');
+            await SmsService.sendSms(user.phone, `SafariPay Confirmed: You have received a deposit of TZS ${amountStr} from ${networkSender}. Your balance has been updated!`, 'SYSTEM', 'SAFARIPAY');
         }
 
         await pool.query('COMMIT');
