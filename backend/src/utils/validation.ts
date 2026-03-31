@@ -29,3 +29,43 @@ export const sendTransactionSchema = z.object({
     amount: z.number().positive().max(5000000, "Fraud Alert: Over transaction limit (Max 5,000,000 TZS)"),
     description: z.string().optional()
 });
+
+/**
+ * 🌍 [JUDGE DEMO] Global Network Matrix
+ * Standardizes prefixes to actual providers across SafariPay regions.
+ */
+export const getNetworkProvider = (phone: string): string => {
+    const clean = phone.replace(/\D/g, '');
+    
+    // Kenya (+254)
+    if (clean.startsWith('254')) {
+        const p = clean.slice(3, 5);
+        if (['70', '71', '72', '79', '11'].includes(p)) return 'Safaricom M-Pesa';
+        if (['73', '75', '78'].includes(p)) return 'Airtel Money';
+        return 'Safaricom';
+    }
+    
+    // Uganda (+256)
+    if (clean.startsWith('256')) {
+        const p = clean.slice(3, 5);
+        if (['77', '78'].includes(p)) return 'MTN MoMo';
+        if (['75', '70'].includes(p)) return 'Airtel Money';
+        return 'MTN';
+    }
+    
+    // Tanzania (+255) - Fallback/Default
+    const p = clean.startsWith('255') ? clean.slice(3, 6) : clean.slice(1, 4);
+    if (['74', '75', '76'].includes(p)) return 'Vodacom M-Pesa';
+    if (['65', '67', '71'].includes(p)) return 'Tigo Pesa';
+    if (['68', '69', '78'].includes(p)) return 'Airtel Money';
+    if (['61', '62'].includes(p)) return 'Halopesa';
+    
+    return 'Vodacom M-Pesa'; // Default
+};
+
+export const getCurrencyByPhone = (phone: string): string => {
+    const clean = phone.replace(/\D/g, '');
+    if (clean.startsWith('254')) return 'KES';
+    if (clean.startsWith('256')) return 'UGX';
+    return 'TZS';
+};

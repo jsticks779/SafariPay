@@ -61,6 +61,21 @@ export const validatePhone = (phone: string, country: string = 'TZ'): Validation
   return { isValid: true, provider, formatted };
 };
 
+export const detectPhoneCountry = (phone: string): string | null => {
+  const clean = phone.replace(/[\s\-\(\)]/g, '');
+  if (clean.startsWith('+255') || clean.startsWith('255') || clean.startsWith('06') || clean.startsWith('07')) {
+    // Basic heuristics: if it starts with 07 and is 10 digits, we can't be sure, but prefixes give a hint.
+    // For exact match:
+    for (const [code, cfg] of Object.entries(COUNTRY_FORMATS)) {
+        if (cfg.regex.test(clean)) return code;
+    }
+  }
+  for (const [code, cfg] of Object.entries(COUNTRY_FORMATS)) {
+      if (clean.startsWith(cfg.prefix) || clean.startsWith(cfg.prefix.replace('+', ''))) return code;
+  }
+  return null;
+};
+
 /**
  * Validates bank account numbers (usually 10-14 digits)
  */

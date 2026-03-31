@@ -10,7 +10,7 @@ import { BehavioralAnalyticsService } from '../services/behavioral_analytics.ser
 import { OracleService } from '../services/oracle.service';
 import { blockchainQueue } from '../services/queue.service';
 import { BlockchainService } from '../services/blockchain.service';
-import { sendTransactionSchema } from '../utils/validation';
+import { sendTransactionSchema, getNetworkProvider, getCurrencyByPhone } from '../utils/validation';
 import { IPFSService } from '../utils/ipfs';
 import { CreditScoringEngine } from '../utils/creditScoring';
 import { LoanService } from '../services/loan.service';
@@ -73,39 +73,39 @@ router.post('/send', async (req: AuthRequest, res: Response): Promise<void> => {
     const isCross = sender.country !== receiver.country;
     let exchangeRate = 1.0;
     if (isCross) {
-      exchangeRate = await OracleService.getFXRate(sender.currency, receiver.currency);
+      const { FXService } = require('../services/fx.service');
+      const cvt = await FXService.convert(1, sender.currency, receiver.currency);
+      exchangeRate = cvt.rate;
     }
 
     const feeRate = isCross ? 0.008 : 0.005;
     const fee = Math.round(+(amount) * feeRate);
 
     // Fee Credit (Reward Balance) Logic 
-    // Fee Credit (Reward Balance) Logic 
-    // Both balance and reward_balance are now standardized to TZS.
     let feeFromBalance = fee;
-    let rewardUsageTZS = 0;
+    let rewardUsageLocal = 0;
 
     const currentReward = Number(sender.reward_balance || 0);
 
     if (currentReward > 0) {
-      rewardUsageTZS = Math.min(currentReward, fee);
-      feeFromBalance = fee - rewardUsageTZS;
+      rewardUsageLocal = Math.min(currentReward, fee);
+      feeFromBalance = fee - rewardUsageLocal;
     }
 
     const total = Number(amount) + feeFromBalance;
 
     if (Number(sender.balance) < total) {
       await client.query('ROLLBACK');
-      res.status(400).json({ error: `Insufficient balance. Need ${total.toLocaleString()} TZS (incl. fee)` }); return;
+      res.status(400).json({ error: `Insufficient balance. Need ${total.toLocaleString()} ${sender.currency} (incl. fee)` }); return;
     }
 
     await client.query(
       'UPDATE users SET balance = balance - $1, reward_balance = reward_balance - $2, updated_at = NOW() WHERE id = $3',
-      [total, rewardUsageTZS, sender.id]
+      [total, rewardUsageLocal, sender.id]
     );
 
     // Auto-Deduction for Receiver (Debt Trap)
-    const rawIncoming = Math.round(amount * exchangeRate);
+    const rawIncoming = Math.round(Number(amount) * exchangeRate);
     const amountAfterDebt = await LoanService.processAutoDeduction(receiver.id, rawIncoming, client);
 
     await client.query(
@@ -152,11 +152,35 @@ router.post('/send', async (req: AuthRequest, res: Response): Promise<void> => {
     // 📱 [JUDGE DEMO] Professional Financial Notifications
     const ref = txRows[0].id.substring(0, 10).toUpperCase();
     
-    const senderMsg = `SafariPay: Sent TZS ${amount.toLocaleString()} to ${receiver.name || receiver_phone}. Fee: ${fee} TZS. New Balance: TZS ${(sender.balance - total).toLocaleString()}. Ref: ${ref}.`;
-    const receiverMsg = `Congratulations! You have received TZS ${Number(amountAfterDebt).toLocaleString()} from ${sender.name}. Ref: ${ref}. SafariPay: Empowering your digital wealth.`;
+    const senderMsg = `SafariPay: Sent ${sender.currency} ${Number(amount).toLocaleString()} to ${receiver.name || receiver_phone}. Fee: ${sender.currency} ${fee}. New Balance: ${sender.currency} ${(Number(sender.balance) - total).toLocaleString()}. Ref: ${ref}.`;
+    const receiverMsg = isCross 
+        ? `Congratulations! You have received ${receiver.currency} ${Number(amountAfterDebt).toLocaleString()} (converted from ${sender.currency} ${Number(amount).toLocaleString()}) from ${sender.name}. Ref: ${ref}.`
+        : `Congratulations! You have received ${receiver.currency} ${Number(amountAfterDebt).toLocaleString()} from ${sender.name}. Ref: ${ref}. SafariPay: Empowering your digital wealth.`;
 
     await SmsService.sendSms(sender.phone, senderMsg, 'TRANSACTION', 'SAFARIPAY');
     await SmsService.sendSms(receiver.phone, receiverMsg, 'TRANSACTION', 'SAFARIPAY');
+
+    // Email Receipt Generation
+    const { FXService } = require('../services/fx.service');
+    const receiptBody = `
+=========================================
+      SAFARIPAY TRANSACTION RECEIPT
+=========================================
+Receipt ID  : ${ref}
+Date        : ${new Date().toLocaleString()}
+Status      : SUCCESS
+
+SENDER      : ${sender.name} (${sender.phone})
+Amount Sent : ${FXService.formatLocal(Number(amount), sender.currency)}
+Fee Paid    : ${FXService.formatLocal(fee, sender.currency)}
+
+RECEIVER    : ${receiver.name}
+Amount Rcvd : ${FXService.formatLocal(amountAfterDebt, receiver.currency)}
+Destination : ${receiver.phone}
+
+Thank you for choosing SafariPay Global.
+`;
+    await SmsService.sendEmail(sender.phone, receiptBody, 'TRANSACTION', 'SafariPay Billing');
 
     await client.query('COMMIT');
 
@@ -207,7 +231,7 @@ router.post('/transfer', async (req: AuthRequest, res: Response): Promise<void> 
         // Allow external Polygon addresses
         if (/^0x[a-fA-F0-9]{40}$/.test(recipient_wallet)) {
             isExternalWallet = true;
-            receiver = { id: null, phone: 'External Wallet', name: 'External Address' };
+            receiver = { id: null, phone: 'External Wallet', name: 'External Address', currency: 'USD' };
         } else {
             await client.query('ROLLBACK');
             res.status(404).json({ error: 'Recipient wallet not found or invalid address' });
@@ -224,31 +248,38 @@ router.post('/transfer', async (req: AuthRequest, res: Response): Promise<void> 
     if (!isPinValid) { await client.query('ROLLBACK'); res.status(403).json({ error: 'Invalid security PIN' }); return; }
 
     // 2.5 Zero-Knowledge Private Key Recovery
-    // Deliverable: Using decryptPrivateKey to recover the signing key for the transaction
     try {
       const { decryptPrivateKey } = require('../utils/cryptoUtils');
       const pk = decryptPrivateKey(sender.encrypted_private_key, user_pin.toString());
-      // In a real production scenario, 'pk' would be used here to sign the Ethers.js transaction
-      // console.log('Successfully recovered private key for transaction signing');
     } catch (e) {
       await client.query('ROLLBACK');
       res.status(403).json({ error: 'Security alert: Signing key recovery failed. Data may be corrupted.' });
       return;
     }
 
-    // 3. Fee Handling (0.5%)
-    const fee = Math.round(+(amount) * 0.005);
+    // 3. FX Math & Balances Deductions
+    const { FXService } = require('../services/fx.service');
+    let receiverAmountLocal = Number(amount);
+    
+    if (!isExternalWallet && sender.country !== receiver.country) {
+      const cvt = await FXService.convert(Number(amount), sender.currency, receiver.currency);
+      receiverAmountLocal = cvt.targetAmount;
+    }
+
+    const feeRate = (!isExternalWallet && sender.country !== receiver.country) ? 0.008 : 0.012;
+    const fee = Math.round(Number(amount) * feeRate);
+    
     let feeFromBalance = fee;
     let rewardUsage = 0;
-    if (+(sender.reward_balance) > 0) {
-      rewardUsage = Math.min(+(sender.reward_balance), fee);
+    if (Number(sender.reward_balance) > 0) {
+      rewardUsage = Math.min(Number(sender.reward_balance), fee);
       feeFromBalance = fee - rewardUsage;
     }
-    const totalToDeduct = +(amount) + feeFromBalance;
+    const totalToDeduct = Number(amount) + feeFromBalance;
 
-    if (+(sender.balance) < totalToDeduct) {
+    if (Number(sender.balance) < totalToDeduct) {
       await client.query('ROLLBACK');
-      res.status(400).json({ error: `Insufficient balance. Need ${totalToDeduct.toLocaleString()} TZS` }); return;
+      res.status(400).json({ error: `Insufficient balance. Need ${totalToDeduct.toLocaleString()} ${sender.currency}` }); return;
     }
 
     // 4. Update Balances
@@ -257,14 +288,17 @@ router.post('/transfer', async (req: AuthRequest, res: Response): Promise<void> 
       [totalToDeduct, rewardUsage, sender.id]
     );
     if (!isExternalWallet) {
-        await client.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [amount, receiver.id]);
+        await client.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [receiverAmountLocal, receiver.id]);
     }
 
-    // 5. Blockchain & External Execution (Unified Service) 🚀
+    // 5. Blockchain Execution (requires USDT bridging amount)
+    const senderToUSDRate = await FXService.getLiveRate(sender.currency);
+    const amountUSDT = Number(amount) / senderToUSDRate;
+
     const unifiedRes = await UnifiedTransferService.execute({
       userId: sender.id,
       category: 'safari',
-      amount: Number(amount),
+      amount: amountUSDT,
       recipient: recipient_wallet,
       description: description || 'Secure Transfer'
     });
@@ -278,39 +312,55 @@ router.post('/transfer', async (req: AuthRequest, res: Response): Promise<void> 
     // 6. Record Transaction
     const { rows: txRows } = await client.query(
       `INSERT INTO transactions(sender_id, receiver_id, sender_phone, receiver_phone, amount, type, status, description, fee, tx_hash)
-       VALUES($1, $2, $3, $4, $5, 'local', 'completed', $6, $7, $8) RETURNING *`,
-      [sender.id, receiver.id, sender.phone, receiver.phone, amount, description || 'Secure Transfer', fee, unifiedRes.txHash || 'PENDING']
+       VALUES($1, $2, $3, $4, $5, 'cross_border', 'completed', $6, $7, $8) RETURNING *`,
+      [sender.id, receiver.id, sender.phone, receiver.phone, amount, description || 'Secure Crypto Bridge', fee, unifiedRes.txHash || 'PENDING']
     );
 
     await client.query('COMMIT');
 
-    // 📢 Notify both via Simulated SMS (using Multi-Currency Localization)
-    const localVal = await FXService.convertToLocalCurrency(Number(amount), sender.country);
-    const formatted = FXService.formatLocal(localVal.amount, localVal.currency);
+    // 7. Generate Detailed Native Notifications
+    const ref = unifiedRes.txHash ? unifiedRes.txHash.substring(0, 10).toUpperCase() : 'PENDING';
+    const isCrossDisplay = sender.country !== (receiver?.country || 'ZZ');
 
-    await SmsService.sendSms(
-      sender.phone,
-      `You have sent ${formatted} to ${receiver.name}. Network: ${unifiedRes.network}`,
-      'TRANSACTION'
-    );
+    // SMS Notifications
+    const senderSms = `SafariPay: Sent ${FXService.formatLocal(Number(amount), sender.currency)} to ${receiver.name}. Fee: ${FXService.formatLocal(fee, sender.currency)}. New Balance: ${FXService.formatLocal(Number(sender.balance)-totalToDeduct, sender.currency)}. Ref: ${ref}`;
+    await SmsService.sendSms(sender.phone, senderSms, 'TRANSACTION', 'SAFARIPAY');
 
     if (!isExternalWallet) {
-        const rLocal = await FXService.convertToLocalCurrency(Number(amount), receiver.country);
-        const rFormatted = FXService.formatLocal(rLocal.amount, rLocal.currency);
-
-        await SmsService.sendSms(
-          receiver.phone,
-          `You have received ${rFormatted} FROM ${sender.name}. Total balance: ${receiver.balance + Number(amount)} USDT. 🎉`,
-          'TRANSACTION'
-        );
+        const receiverSms = isCrossDisplay
+          ? `Congratulations! You have received ${FXService.formatLocal(receiverAmountLocal, receiver.currency)} (converted from ${sender.currency} ${Number(amount).toLocaleString()}) from ${sender.name}. Ref: ${ref}.`
+          : `Congratulations! You have received ${FXService.formatLocal(receiverAmountLocal, receiver.currency)} from ${sender.name}. Total balance updated. Ref: ${ref}. SafariPay.`;
+        await SmsService.sendSms(receiver.phone, receiverSms, 'TRANSACTION', 'SAFARIPAY');
     }
+
+    // Email Receipt Generation
+    const receiptBody = `
+=========================================
+      SAFARIPAY TRANSACTION RECEIPT
+=========================================
+Receipt ID  : ${ref}
+Date        : ${new Date().toLocaleString()}
+Status      : SUCCESS
+Network     : ${unifiedRes.network || 'Polygon System'}
+
+SENDER      : ${sender.name} (${sender.phone})
+Amount Sent : ${FXService.formatLocal(Number(amount), sender.currency)}
+Fee Paid    : ${FXService.formatLocal(fee, sender.currency)}
+
+RECEIVER    : ${receiver.name}
+Amount Rcvd : ${!isExternalWallet ? FXService.formatLocal(receiverAmountLocal, receiver.currency || 'USD') : amountUSDT.toFixed(2) + ' USDT'}
+Destination : ${isExternalWallet ? receiver.phone : receiver.phone}
+
+Thank you for choosing SafariPay Global.
+`;
+    await SmsService.sendEmail(sender.phone, receiptBody, 'TRANSACTION', 'SafariPay Billing');
 
     res.json({
       success: true,
       transaction: txRows[0],
       tx_hash: unifiedRes.txHash,
       network: unifiedRes.network,
-      message: unifiedRes.message
+      message: 'Secure cross-border transfer finalized!'
     });
   } catch (e: any) {
     await client.query('ROLLBACK');
@@ -531,20 +581,18 @@ router.post('/external', async (req: AuthRequest, res: Response): Promise<void> 
 
     // 📱 [JUDGE DEMO] External Provider Simulation — REALISTIC SENDERS
     const ref = txRows[0].id.substring(0, 10).toUpperCase();
-    const providerSenderMap: Record<string, string> = {
-      'MPESA': 'M-PESA', 'TIGOPESA': 'TIGO PESA', 'AIRTELMONEY': 'AIRTEL MONEY',
-      'HALOPESA': 'HALOPESA', 'CRDB': 'CRDB BANK', 'NMB': 'NMB BANK',
-      'NBC': 'NBC BANK', 'EQUITY': 'EQUITY BANK', 'KCB': 'KCB BANK'
-    };
-    const networkSender = providerSenderMap[(provider || '').toUpperCase()] || (provider || 'Network').toUpperCase();
+    
+    // Automatically detect network and currency based on recipient phone
+    const networkSender = getNetworkProvider(receiver_id);
+    const targetCurrency = getCurrencyByPhone(receiver_id);
 
     // 1. Sender Notification (from SAFARIPAY)
-    const senderMsg = `SafariPay: Sent TZS ${amount.toLocaleString()} to ${networkSender} (${receiver_id}) success. Fee: ${fee} TZS. New Balance: TZS ${(user.balance - total).toLocaleString()}. Ref: ${ref}.`;
+    const senderMsg = `SafariPay: Sent ${user.currency} ${amount.toLocaleString()} to ${networkSender} (${receiver_id}) success. Fee: ${fee} ${user.currency}. New Balance: ${user.currency} ${(user.balance - total).toLocaleString()}. Ref: ${ref}.`;
     await SmsService.sendSms(user.phone, senderMsg, 'TRANSACTION', 'SAFARIPAY');
 
     // 2. Recipient Notification (from actual Network/Bank)
-    const networkMsg = `${ref} Confirmed. You have received TZS ${amount.toLocaleString()} from SAFARIPAY (${user.name}) on your ${networkSender} account. Trans. ID: ${ref}. Thank you for using ${networkSender}.`;
-    await SmsService.sendSms(receiver_id, networkMsg, 'TRANSACTION', networkSender);
+    const networkMsg = `${ref} Confirmed. You have received ${targetCurrency} ${amount.toLocaleString()} from SAFARIPAY (${user.name}) on your ${networkSender} account. Trans. ID: ${ref}. Thank you for using ${networkSender}.`;
+    await SmsService.sendSms(receiver_id, networkMsg, 'TRANSACTION', networkSender.split(' ')[0].toUpperCase());
 
     res.json({
       transaction: txRows[0],

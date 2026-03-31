@@ -19,7 +19,7 @@ import {
 import Select from '../components/Select';
 import { ALL_COUNTRIES } from '../lib/countries';
 import { queueOfflineTransaction } from '../lib/offlineQueue';
-import { validatePhone, validateAccount } from '../lib/validation';
+import { validatePhone, validateAccount, detectPhoneCountry } from '../lib/validation';
 
 type Method = 'mobile' | 'bank' | 'crypto';
 type Step = 'method' | 'form' | 'confirm' | 'done';
@@ -60,7 +60,14 @@ export default function Withdraw() {
             }
         } else if (method === 'mobile') {
           const v = validatePhone(phone, user?.country || 'TZ');
-          if (!v.isValid) return toast.error(v.message || 'Invalid phone number');
+          if (!v.isValid) {
+              const detectedCode = detectPhoneCountry(phone);
+              if (detectedCode && detectedCode !== user?.country) {
+                  const countryName = ALL_COUNTRIES.find(c => c.code === detectedCode)?.name || detectedCode;
+                  return toast.error(`Use Send Global method instead. This phone number belongs to ${countryName}, which requires a cross-border transfer.`, { duration: 6000 });
+              }
+              return toast.error(v.message || 'Invalid phone number');
+          }
         } else {
           const v = validateAccount(account, provider);
           if (!v.isValid) return toast.error(v.message || 'Invalid account number');

@@ -12,9 +12,11 @@ import {
   Bell,
   Lock,
   Smartphone,
-  Search
+  Search,
+  CheckCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useAuth } from '../hooks/useAuth';
 
 interface MessageLog {
     id: string;
@@ -64,6 +66,8 @@ export default function VirtualPhone() {
     const [lastMsgCount, setLastMsgCount] = useState(0);
     const [openChat, setOpenChat] = useState<string | null>(null); // sender name for open thread
     const [readCountCache, setReadCountCache] = useState<Record<string, number>>({});
+    const [selectedEmail, setSelectedEmail] = useState<MessageLog | null>(null);
+    const { user } = useAuth();
 
     useEffect(() => {
         if (openChat) {
@@ -80,7 +84,17 @@ export default function VirtualPhone() {
                 const { data } = await api.get(`/system/sms-logs/${phone}`);
                 setMessages(data);
                 
-                if (data.length > lastMsgCount) {
+                // Initialize cache for all threads on first load so they don't appear as "unread" from the start 
+                // but only count NEW ones that arrive after the app is opened.
+                if (lastMsgCount === 0) {
+                    const initialCache: Record<string, number> = {};
+                    data.forEach((m: MessageLog) => {
+                        const s = (m.sender || 'SAFARIPAY').toUpperCase();
+                        initialCache[s] = (initialCache[s] || 0) + 1;
+                    });
+                    setReadCountCache(initialCache);
+                    setLastMsgCount(data.length);
+                } else if (data.length > lastMsgCount) {
                     const newMessages = data.slice(0, data.length - lastMsgCount);
                     const stkMsg = newMessages.find((m: MessageLog) => m.type === 'STK_PUSH');
                     
@@ -108,6 +122,11 @@ export default function VirtualPhone() {
     const formatTime = (ts: string) => {
         const d = new Date(ts);
         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const formatDateShort = (ts: string) => {
+        const d = new Date(ts);
+        return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
     };
 
     const smsMessages = messages.filter(m => m.channel === 'SMS');
@@ -401,34 +420,37 @@ export default function VirtualPhone() {
                     )}
 
                     {/* App: Email */}
-                    {activeTab === 'email' && (
+                    {activeTab === 'email' && !selectedEmail && (
                         <div className="animate-fade" style={{ height: '100%', background: '#fff', color: '#1e293b', display: 'flex', flexDirection: 'column' }}>
                             <div style={{ padding: '40px 20px 15px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', gap: 15 }}>
-                                <ChevronLeft size={24} onClick={() => setActiveTab('lock')} />
+                                <ChevronLeft size={24} onClick={() => setActiveTab('lock')} style={{ cursor: 'pointer' }} />
                                 <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Inbox</h3>
                                 <div style={{ flex: 1 }} />
-                                <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#3b82f6', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>J</div>
+                                <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#3b82f6', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>{user?.name?.[0]?.toUpperCase() || 'U'}</div>
                             </div>
 
                             <div style={{ flex: 1, padding: 15, overflowY: 'auto' }}>
                                 {emailMessages.map(msg => (
-                                    <div key={msg.id} style={{ 
+                                    <div key={msg.id} 
+                                         onClick={() => setSelectedEmail(msg)}
+                                         style={{ 
                                         padding: '15px 0', 
                                         borderBottom: '1px solid #f8fafc',
-                                        display: 'flex', gap: 12
+                                        display: 'flex', gap: 12,
+                                        cursor: 'pointer'
                                     }}>
                                         <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#fef2f2', border: '1px solid #fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
                                           <Smartphone size={20} />
                                         </div>
-                                        <div style={{ flex: 1 }}>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                                                <span style={{ fontSize: 14, fontWeight: 700 }}>SafariPay Security</span>
-                                                <span style={{ fontSize: 11, opacity: 0.5 }}>{formatTime(msg.timestamp)}</span>
+                                                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{msg.sender || 'SafariPay Billing'}</span>
+                                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatTime(msg.timestamp)}</span>
                                             </div>
-                                            <p style={{ fontSize: 13, fontWeight: 600, color: '#334155', margin: '0 0 2px' }}>Security Alert: Transaction</p>
-                                            <p style={{ fontSize: 12, color: '#64748b', margin: 0, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                            <div style={{ fontSize: 13, color: '#334155', fontWeight: 600, marginBottom: 4 }}>Transaction Receipt</div>
+                                            <div style={{ fontSize: 13, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 {msg.message}
-                                            </p>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -436,6 +458,77 @@ export default function VirtualPhone() {
                         </div>
                     )}
 
+                    {/* Email Reader View */}
+                    {activeTab === 'email' && selectedEmail && (
+                        <div className="animate-fade" style={{ height: '100%', background: '#f1f5f9', color: '#1e293b', display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ padding: '40px 20px 15px', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 15 }}>
+                                <ChevronLeft size={24} onClick={() => setSelectedEmail(null)} style={{ cursor: 'pointer' }} />
+                                <div style={{ flex: 1, textAlign: 'center', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Receipt Details</div>
+                                <div style={{ width: 24 }} />
+                            </div>
+                            
+                            <div style={{ flex: 1, padding: '15px', overflowY: 'auto' }}>
+                                <div style={{ 
+                                    background: 'white', 
+                                    borderRadius: 20, 
+                                    overflow: 'hidden',
+                                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.05)'
+                                }}>
+                                    {/* Receipt Header */}
+                                    <div style={{ background: '#3b82f6', padding: '25px 20px', textAlign: 'center', color: 'white' }}>
+                                        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                                            <CheckCircle size={24} />
+                                        </div>
+                                        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Transaction Success</h2>
+                                        <p style={{ margin: '4px 0 0', fontSize: 12, opacity: 0.8 }}>SafariPay Global Transfer</p>
+                                    </div>
+
+                                    {/* Receipt Body */}
+                                    <div style={{ padding: 20 }}>
+                                        <div style={{ textAlign: 'center', marginBottom: 25 }}>
+                                            <span style={{ fontSize: 12, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Amount Sent</span>
+                                            <h1 style={{ margin: '5px 0', fontSize: 28, fontWeight: 900, color: '#0f172a' }}>
+                                                {selectedEmail.message.match(/Sent ([A-Z ]+[0-9,.]+)/)?.[1] || 'Completed'}
+                                            </h1>
+                                            <div style={{ fontSize: 11, color: '#3b82f6', background: '#eff6ff', padding: '3px 10px', borderRadius: 20, display: 'inline-block' }}>
+                                                Settled via SafariBridge
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 15, borderTop: '1px dashed #e2e8f0', paddingTop: 20 }}>
+                                            {[
+                                                { label: 'SENDER', val: selectedEmail.message.match(/SENDER\s+:\s+(.*)/)?.[1] || 'You' },
+                                                { label: 'RECEIVER', val: selectedEmail.message.match(/RECEIVER\s+:\s+(.*)/)?.[1] || 'Third Party' },
+                                                { label: 'REF ID', val: selectedEmail.message.match(/Receipt ID\s+:\s+(.*)/)?.[1] || '---' },
+                                                { label: 'DATE', val: formatDateShort(selectedEmail.timestamp) + ' ' + formatTime(selectedEmail.timestamp) }
+                                            ].map((item, i) => (
+                                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                                    <span style={{ color: '#64748b', fontWeight: 500 }}>{item.label}</span>
+                                                    <span style={{ color: '#0f172a', fontWeight: 700 }}>{item.val}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div style={{ marginTop: 25, background: '#f8fafc', borderRadius: 12, padding: 15, fontSize: 12, color: '#475569', lineHeight: 1.5 }}>
+                                            <b>Note:</b> This transaction has been confirmed on the Polygon blockchain. Your digital receipt is secured via IPFS.
+                                        </div>
+                                        
+                                        <button 
+                                            onClick={() => setSelectedEmail(null)}
+                                            style={{ 
+                                            width: '100%', height: 48, borderRadius: 12, background: '#0f172a', color: 'white', border: 'none', fontWeight: 700, fontSize: 14, marginTop: 20, cursor: 'pointer' 
+                                        }}>
+                                            Close Receipt
+                                        </button>
+                                    </div>
+                                </div>
+                                <p style={{ textAlign: 'center', fontSize: 11, color: '#94a3b8', marginTop: 20 }}>
+                                    SafariPay Global — Empowering Digital Wealth<br/>
+                                    Support: help@safaripay.io
+                                </p>
+                            </div>
+                        </div>
+                    )}
                     {/* STK Push Overlay */}
                     {showStk && (
                         <div style={{ 
