@@ -23,6 +23,7 @@ import RequestMoney from './pages/RequestMoney';
 import PaymentSummary from './pages/PaymentSummary';
 import Onboarding from './pages/Onboarding';
 import KycBanner from './components/KycBanner';
+import VirtualPhone from './pages/VirtualPhone';
 import { Loader2, WifiOff, Globe } from 'lucide-react';
 
 import AdminDashboard from './pages/AdminDashboard';
@@ -52,6 +53,7 @@ function Shell() {
     </div>
   );
   const isOnboarding = location.pathname === '/onboarding';
+  const isSimulator = location.pathname.startsWith('/phone/');
 
   const renderContent = () => {
     if (!user) return (
@@ -108,9 +110,10 @@ function Shell() {
           <Route path="/pay/:id" element={<PaymentSummary />} />
           <Route path="/system/sms" element={<SmsDashboard />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/phone/:phone" element={<VirtualPhone />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-        {!isOnboarding && <BottomNav />}
+        {!isOnboarding && !isSimulator && <BottomNav />}
       </>
     );
   };

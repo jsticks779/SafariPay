@@ -57,7 +57,7 @@ export default function ReceiveMoney() {
                 phone: depositPhone,
                 provider: provider
             });
-            toast.success(res.data.message || `Successfully started deposit via ${provider}!`);
+            toast.success('STK Push sent to your phone! Review it to pay');
             await refresh();
             setAmount('');
         } catch (e: any) {

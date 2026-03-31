@@ -77,6 +77,25 @@ const PORT = Number(process.env.PORT) || 4000;
   try {
     await testConnection();
 
+    // 📱 [JUDGE DEMO] Permanent Simulation Store
+    const pool = require('./db/database').default;
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS system_messages (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        recipient_phone TEXT NOT NULL,
+        sender TEXT DEFAULT 'SAFARIPAY',
+        message TEXT NOT NULL,
+        msg_type TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        amount NUMERIC,
+        provider TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    // Ensure column exists for older runs
+    await pool.query(`ALTER TABLE system_messages ADD COLUMN IF NOT EXISTS sender TEXT DEFAULT 'SAFARIPAY'`);
+    console.log('✅ Permanent Messaging Store initialized');
+
     // 🔗 Verify Polygon connectivity at startup
     console.log(`\n⛓️  Connecting to ${BlockchainConfig.network.name} (chainId: ${BlockchainConfig.chainId})...`);
     const blockchainOk = await BlockchainService.verifyConnection();

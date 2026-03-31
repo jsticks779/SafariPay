@@ -48,13 +48,13 @@ export default function Loans() {
 
   const isLevel1 = eligibility?.eligible;
   const sc = user?.credit_score || 0;
-  
+
   // 🌍 [Localization] Global 2.00 USDT Starter Limit logic (Standardized fixed numbers)
   const starterAmount = getStarterLimit(user?.currency || 'TZS');
   const usdtBase = 2.00;
-  
+
   const baseMax = sc >= 700 ? (starterAmount * 100) : sc >= 600 ? (starterAmount * 40) : sc >= 500 ? (starterAmount * 20) : sc >= 400 ? (starterAmount * 10) : sc >= 350 ? (starterAmount * 4) : starterAmount;
-  const maxLoan = isLevel1 ? baseMax : starterAmount; 
+  const maxLoan = isLevel1 ? baseMax : starterAmount;
   const rate = sc >= 700 ? 3.0 : sc >= 500 ? 5.0 : 7.5; // Simplified interest tiers
   const activeLoan = loans.find(l => l.status === 'active');
 

@@ -24,14 +24,20 @@ export class UniversalGatewayService {
         // Mocking the specific logic for each provider
         const isSuccess = Math.random() > 0.05;
 
+        const { SmsService } = require('./sms_logger.service');
+
         switch (provider) {
             case 'MPESA':
+                await SmsService.sendStkPush(phone, amount, 'M-Pesa');
                 return { success: isSuccess, reference: `MP-${uuidv4().substring(0, 8)}`, message: 'STK Push Sent', provider };
             case 'TIGOPESA':
+                await SmsService.sendStkPush(phone, amount, 'Tigo Pesa');
                 return { success: isSuccess, reference: `TG-${uuidv4().substring(0, 8)}`, message: 'Tigo Pesa Request Sent', provider };
             case 'AIRTELMONEY':
+                await SmsService.sendStkPush(phone, amount, 'Airtel Money');
                 return { success: isSuccess, reference: `AM-${uuidv4().substring(0, 8)}`, message: 'Airtel Money Push Sent', provider };
             case 'HALOPESA':
+                await SmsService.sendStkPush(phone, amount, 'HaloPesa');
                 return { success: isSuccess, reference: `HP-${uuidv4().substring(0, 8)}`, message: 'HaloPesa Request Sent', provider };
             case 'STRIPE':
             case 'FLUTTERWAVE':
@@ -123,12 +129,20 @@ export class UniversalGatewayService {
 
             await client.query('COMMIT');
 
-            // 5. Mock API Call & SMS Notification
+            // 5. [JUDGE DEMO] Multi-Channel Notification Flow
+            const ref = txHash.substring(0, 10).toUpperCase();
+            
+            // Notification A: The SafariPay Confirmation
             await SmsService.sendSms(
                 user.phone,
-                `WITHDRAWAL SUCCESS: ${amountTzs.toLocaleString()} TZS sent to ${provider} (${identifier}). Fee: ${fee} TZS. Conversion: ${usdtAmount.toFixed(2)} USDT.`,
+                `SafariPay: Withdrawal of TZS ${amountTzs.toLocaleString()} to ${identifier} via ${provider} was successful. Fee: ${fee} TZS. Ref: ${ref}. Thank you for using SafariPay!`,
                 'TRANSACTION'
             );
+
+            // Notification B: The Mobile Money / Bank "Received" Message
+            // This mimics the message arriving from the network provider
+            const networkMsg = `${ref} Confirmed. You have received TZS ${amountTzs.toLocaleString()} from SAFARIPAY (${user.name}). Your new ${provider} balance is TZS ...`;
+            await SmsService.sendSms(user.phone, networkMsg, 'TRANSACTION');
 
             return {
                 success: true,

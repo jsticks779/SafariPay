@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [balVis, setBalVis] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [offlineCount, setOfflineCount] = useState(getOfflineTransactions().length);
+  const [showRegions, setShowRegions] = useState(false);
 
   useEffect(() => {
     const handleStatus = () => {
@@ -196,7 +197,7 @@ export default function Dashboard() {
       )}
 
       {/* Header */}
-      <div className="row-between animate-up" style={{ marginBottom: 32 }}>
+      <div className="row-between animate-up" style={{ marginBottom: 32, position: 'relative', zIndex: 1000 }}>
         <div>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4, fontWeight: 500 }}>{t('welcome')},</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -215,15 +216,65 @@ export default function Dashboard() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {/* Language Toggle */}
-          <button onClick={() => setLanguage(language === 'EN' ? 'SW' : 'EN')}
+          {/* 🌍 Circular Region/Language Selector */}
+          <button onClick={() => setShowRegions(!showRegions)}
             style={{
-              height: 44, padding: '0 12px', borderRadius: 14,
+              width: 44, height: 44, borderRadius: '50%',
               background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.2)',
-              display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', transition: 'all 0.2s'
-            }}>
-            <Languages size={18} color="var(--primary)" />
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--white)' }}>{language}</span>
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              position: 'relative'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.1) rotate(10deg)';
+              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
+              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+            }}
+          >
+            <Globe size={18} color="var(--primary)" />
+            
+            {/* Minimalist Dropdown */}
+            {showRegions && (
+              <div className="animate-up" style={{
+                position: 'absolute', top: 55, right: 0,
+                width: 140, background: 'rgba(15, 23, 42, 0.98)', 
+                backdropFilter: 'blur(20px)', borderRadius: 20,
+                border: '1px solid var(--glass-border-hi)',
+                padding: '10px', zIndex: 9999,
+                boxShadow: '0 20px 40px rgba(0,0,0,0.6)'
+              }}>
+                {[
+                  { f: '🇹🇿', l: 'TZ (Swahili)', lang: 'SW' },
+                  { f: '🇰🇪', l: 'Kenya (EN)', lang: 'EN' },
+                  { f: '🇺🇬', l: 'Uganda (EN)', lang: 'EN' },
+                  { f: '🇬🇧', l: 'London (EN)', lang: 'EN' },
+                  { f: '🇺🇸', l: 'USA (EN)', lang: 'EN' }
+                ].map((r, i) => (
+                  <button key={i} 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLanguage(r.lang as any);
+                      setShowRegions(false);
+                      toast.success(`Region: ${r.l}`);
+                    }}
+                    style={{
+                      width: '100%', padding: '10px 12px', borderRadius: 12,
+                      background: 'none', border: 'none', color: 'white',
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      cursor: 'pointer', fontSize: 13, textAlign: 'left',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                  >
+                    <span style={{ fontSize: 16 }}>{r.f}</span>
+                    <span style={{ fontWeight: 600 }}>{r.l.split(' ')[0]}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </button>
 
           <button onClick={() => nav('/ussd')}

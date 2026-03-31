@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import pool from '../db/database';
 import { BridgeConfig, getMockRate } from '../config/bridge.config';
 import { logger } from '../utils/logger';
+import { SmsService } from './sms_logger.service';
 
 // Interface defining what every provider must implement
 export interface PaymentProvider {
@@ -54,6 +55,9 @@ export class SafariPaymentBridge implements PaymentProvider {
         console.log(`[BRIDGE] On-Ramp: Received ${amountTzs.toLocaleString()} TZS from ${phone}`);
         console.log(`[BRIDGE] On-Ramp: Equates to ${usdtEquivalent.toFixed(4)} USDT for User ${userId}`);
 
+        // 📱 [JUDGE DEMO] Trigger STK Push in Simulator
+        await SmsService.sendStkPush(phone, amountTzs, 'Mobile Money');
+
         let isSuccess = false;
 
         if (BridgeConfig.mode === 'TESTNET') {
@@ -83,37 +87,37 @@ export class SafariPaymentBridge implements PaymentProvider {
             isSuccess = true; // Placeholder for real implementation
         }
 
-        // --- Database Integration ---
-        const txHash = `onramp_${crypto.randomBytes(8).toString('hex')}`;
-        const finalStatus = isSuccess ? 'SUCCESS' : 'FAILED';
+        // --- [SIMULATOR DEMO] High Fidelity Bridge Logic ---
+        const txHash = `ONR_${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+        
+        // In demo mode, we mark it as PENDING and let the STK Push confirmation handle the rest
+        const demoStatus = BridgeConfig.mode === 'TESTNET' ? 'PENDING' : 'SUCCESS';
 
         try {
             await pool.query('BEGIN');
 
-            // 1. Record the On-Ramp Transaction into the DB
+            // 1. Record the PENDING transaction
             await pool.query(
                 `INSERT INTO bridge_transactions (user_id, type, amount_fiat, amount_crypto, status, tx_hash)
                  VALUES ($1, 'ONRAMP', $2, $3, $4, $5)`,
-                [userId, amountTzs, usdtEquivalent, finalStatus, txHash]
+                [userId, amountTzs, usdtEquivalent, demoStatus, txHash]
             );
 
-            // 2. Update the user's SafariPay Portfolio Balance if successful
-            if (isSuccess) {
-                await pool.query(
-                    `UPDATE users SET balance = balance + $1 WHERE id = $2`,
-                    [amountTzs, userId]
-                );
-            }
+            // 2. [IMPORTANT] We no longer update users SET balance here! 
+            // The balance will only update once the user hits "Pay Now" on the virtual phone.
 
             await pool.query('COMMIT');
-            if (isSuccess) logger.info('BRIDGE', `Database updated. Balance credited. TxHash: ${txHash}`);
+            
+            // 📱 Trigger the Simulation Push with the specific TxHash so the phone can confirm it
+            await SmsService.sendStkPush(phone, amountTzs, 'Mobile Money', txHash);
+            
+            logger.info('BRIDGE', `Pending On-Ramp created. Waiting for Simulator Approval. Tx: ${txHash}`);
+            return true;
         } catch (dbErr: any) {
             await pool.query('ROLLBACK');
-            logger.error('BRIDGE', `Database transaction failed during On-Ramp: ${dbErr.message}`);
+            logger.error('BRIDGE', `Database failure during On-Ramp initiation: ${dbErr.message}`);
             return false;
         }
-
-        return isSuccess;
     }
 
     /**
