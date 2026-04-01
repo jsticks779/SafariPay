@@ -4,7 +4,7 @@
   <p><b>Africa's Unified Digital Economy on Polygon & Storacha</b></p>
   <p>Instant P2P Payments · Decentralized Credit · Micro-Loans · Mobile Money Ramps</p>
 
-  [![Hackathon](https://img.shields.io/badge/Hackathon-protocol lab-blueviolet?style=for-the-badge)](https://protocol.ai)
+  [![Hackathon](https://img.shields.io/badge/Hackathon-protocollab-blueviolet?style=for-the-badge)](https://protocol.ai)
   [![Polygon](https://img.shields.io/badge/Network-Polygon-8247E5?style=for-the-badge&logo=polygon)](https://polygon.technology)
   [![Storacha](https://img.shields.io/badge/Storage-Storacha-0090FF?style=for-the-badge)](https://storacha.network)
 </div>
