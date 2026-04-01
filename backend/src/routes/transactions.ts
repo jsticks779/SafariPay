@@ -358,9 +358,11 @@ Thank you for choosing SafariPay Global.
     res.json({
       success: true,
       transaction: txRows[0],
-      tx_hash: unifiedRes.txHash,
-      ipfs_receipt: unifiedRes.ipfsCid,
+      txHash: unifiedRes.txHash,
+      ipfsCid: unifiedRes.ipfsCid,
+      receiptLink: unifiedRes.receiptLink,
       network: unifiedRes.network,
+      explorerUrl: unifiedRes.explorerUrl,
       message: 'Secure cross-border transfer finalized!'
     });
   } catch (e: any) {
@@ -540,7 +542,14 @@ router.post('/withdraw/crypto', async (req: AuthRequest, res: Response): Promise
     const cryptoMsg = `SafariPay: Withdrawal of TZS ${amount_tzs.toLocaleString()} to wallet ${wallet_address.substring(0,6)}...${wallet_address.substring(38)} (${network}) was successful. Ref: ${unifiedRes.txHash?.substring(0,10).toUpperCase()}.`;
     await SmsService.sendSms(user.phone, cryptoMsg, 'TRANSACTION', 'SAFARIPAY');
 
-    res.json({ message: 'Crypto Withdrawal processed.', txHash: unifiedRes.txHash });
+    res.json({ 
+      success: true, 
+      message: 'Crypto Withdrawal processed.', 
+      txHash: unifiedRes.txHash,
+      ipfsCid: unifiedRes.ipfsCid,
+      receiptLink: unifiedRes.receiptLink,
+      explorerUrl: unifiedRes.explorerUrl
+    });
   } catch (e: any) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: e.message });
@@ -621,9 +630,13 @@ router.post('/external', async (req: AuthRequest, res: Response): Promise<void> 
     await SmsService.sendSms(receiver_id, networkMsg, 'TRANSACTION', networkSender.split(' ')[0].toUpperCase());
 
     res.json({
+      success: true,
       transaction: txRows[0],
-      tx_hash: unifiedRes.txHash,
+      txHash: unifiedRes.txHash,
+      ipfsCid: unifiedRes.ipfsCid,
+      receiptLink: unifiedRes.receiptLink,
       network: unifiedRes.network,
+      explorerUrl: unifiedRes.explorerUrl,
       message: unifiedRes.message
     });
   } catch (e: any) { res.status(500).json({ error: e.message }); }

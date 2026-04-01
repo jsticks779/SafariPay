@@ -43,6 +43,7 @@ export default function PaymentSummary() {
     const [paying, setPaying] = useState(false);
     const [paid, setPaid] = useState(false);
     const [txHash, setTxHash] = useState('');
+    const [receiptLink, setReceiptLink] = useState('');
     const [pin, setPin] = useState('');
     const [showPin, setShowPin] = useState(false);
     const [gasInfo, setGasInfo] = useState<GasInfo>({
@@ -160,6 +161,7 @@ export default function PaymentSummary() {
             });
 
             setTxHash(data.txHash || data.tx_hash || data.transaction?.tx_hash || '');
+            setReceiptLink(data.receiptLink || data.ipfsLink || '');
             setPaid(true);
 
             // Mark the request as paid on the backend (only if it's a DB request)
@@ -266,6 +268,36 @@ export default function PaymentSummary() {
                             <ExternalLink size={12} /> View
                         </a>
                     </div>
+                </div>
+            )}
+
+            {/* Verifiable Receipt Link */}
+            {receiptLink && (
+                <div style={{
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    border: '1px solid rgba(16, 185, 129, 0.2)',
+                    borderRadius: 20, padding: '16px 20px',
+                    marginBottom: 28, maxWidth: 380, width: '100%',
+                }}>
+                    <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>🛡️ Verifiable Receipt</p>
+                    <a
+                        href={receiptLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            color: '#10b981', fontSize: 13, fontWeight: 700,
+                            textDecoration: 'none', padding: '10px 14px',
+                            background: 'rgba(16, 185, 129, 0.1)', borderRadius: 10
+                        }}
+                    >
+                        <ShieldCheck size={16} />
+                        View on Filecoin
+                        <ExternalLink size={12} style={{ marginLeft: 'auto' }} />
+                    </a>
+                    <p style={{ fontSize: 11, color: 'rgba(16, 185, 129, 0.7)', marginTop: 8, lineHeight: 1.4 }}>
+                        IPFS-backed receipt stored on Filecoin via Storacha. Permanent & immutable proof.
+                    </p>
                 </div>
             )}
 
