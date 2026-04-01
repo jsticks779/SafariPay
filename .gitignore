@@ -5,7 +5,8 @@ coverage/
 .DS_Store
 uploads/
 temp/
-
+DEMO_MODE_GUIDE.md
+JUDGE_DEMO.md
 # Environments
 .env
 .env.*

@@ -79,7 +79,7 @@ The result: unbanked Africans can send money instantly, build cryptographic cred
 ### Setup
 ```bash
 # Clone and install
-git clone https://github.com/yourusername/SafariPay.git
+git clone https://github.com/jsticks779/SafariPay.git
 cd SafariPay
 
 # Backend
@@ -150,6 +150,17 @@ JWT_SECRET=your_jwt_secret
 ✅ **Mobile UI** optimized for sub-$50 phones  
 
 **Ready for**: Protocol Labs, Web3 judges, fintech evaluators
+
+---
+
+## 👥 Team
+
+Built by passionate developers solving real African fintech challenges.
+
+| Name | Role | Email | Twitter |
+|------|------|-------|---------|
+| **Junior Jovin Emmanuel** | Full Stack Developer | [jsticks779@gmail.com](mailto:jsticks779@gmail.com) | [@jsticks](https://x.com/jsticks) |
+| **Newton Joshua** | Full Stack Developer | [newtonjoshuasinda2000@gmail.com](mailto:newtonjoshuasinda2000@gmail.com) | [@NewtonJosh41721](https://x.com/NewtonJosh41721) |
 
 ---
 
