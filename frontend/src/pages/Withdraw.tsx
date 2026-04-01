@@ -113,10 +113,10 @@ export default function Withdraw() {
             </p>
 
             <div className="card" style={{ maxWidth: 380, margin: '0 auto 40px', textAlign: 'left' }}>
-                {result?.ipfs_receipt && (
+                {result?.receiptLink && (
                     <div style={{ padding: '16px 0', textAlign: 'center' }}>
                         <a 
-                            href={`https://w3s.link/ipfs/${result.ipfs_receipt}`} 
+                            href={result.receiptLink} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             style={{ 

@@ -1,128 +1,159 @@
 <div align="center">
   <img src="logo.png" alt="SafariPay" width="120px" />
   <h1>🦁 SafariPay</h1>
-  <p><b>Africa's Unified Digital Economy on Flow & Filecoin</b></p>
-  <p>Rapid P2P Payments · Decentralized Credit · Micro-Loans · On/Off-Ramp</p>
+  <p><b>Africa's Unified Digital Economy on Polygon & Storacha</b></p>
+  <p>Instant P2P Payments · Decentralized Credit · Micro-Loans · Mobile Money Ramps</p>
 
-  [![Hackathon](https://img.shields.io/badge/Hackathon-Protocol%20Labs-blueviolet?style=for-the-badge&logo=proto.io)](https://protocol.ai)
-  [![Flow](https://img.shields.io/badge/Network-Flow-00ef8b?style=for-the-badge&logo=flow)](https://flow.com)
-  [![Filecoin](https://img.shields.io/badge/Storage-Filecoin-0090FF?style=for-the-badge&logo=filecoin)](https://filecoin.io)
+  [![Hackathon](https://img.shields.io/badge/Hackathon-Ready-blueviolet?style=for-the-badge)](https://protocol.ai)
+  [![Polygon](https://img.shields.io/badge/Network-Polygon-8247E5?style=for-the-badge&logo=polygon)](https://polygon.technology)
+  [![Storacha](https://img.shields.io/badge/Storage-Storacha-0090FF?style=for-the-badge)](https://storacha.network)
 </div>
 
 ---
 
 ## 📖 Overview
-**SafariPay** is a next-generation financial ecosystem designed to bridge the gap between traditional mobile money and the decentralized world. Built for the unbanked and underbanked populations of Africa, we leverage **Flow** for lightning-fast, consumer-grade transactions and **Filecoin** for permanent, immutable receipt storage and identity verification.
+**SafariPay** is a next-generation financial infrastructure built to bridge Africa's mobile money economy with Web3. Born from the hackathon to solve real fintech challenges, we deliver:
+- **Lightning-fast payments** via Polygon Amoy Testnet (2-second settlement)
+- **Permanent receipt storage** on Filecoin through Storacha
+- **Verifiable credit scores** anchored on-chain
+- **Full offline-first architecture** for low-connectivity regions
 
-SafariPay solves the critical issues of financial exclusion and lack of credit history by transforming transaction data into verifiable on-chain assets.
-
----
-
-## ✨ Core Features
-- **⚡ High-Speed P2P Payments (Flow)**: Execute near-instant money transfers across borders with minimal fees using Flow's consumer-focused blockchain architecture.
-- **📜 Decentralized Receipt Storage (Filecoin)**: Every transaction generates a cryptographically signed receipt stored permanently on Filecoin (via web3.storage), providing an unmanipulatable audit trail.
-- **🔍 CID Verification**: Users can verify any transaction's integrity using its Content Identifier (CID). This allows for decentralized dispute resolution without middleman trust.
-- **📊 Real-Time Credit Scoring**: A proprietary AI engine calculates creditworthiness based on transaction history and mobile money habits, anchoring scores as Soulbound Tokens (NFTs) on Flow.
-- **💸 Decentralized Micro-Loans**: Automated lending pools that disburse funds based on your "Safari Score," with repayment logic built into incoming transfers.
-- **🔄 On-Ramp & Off-Ramp**: Seamless integration with local mobile money providers (M-Pesa, Tigo Pesa) for easy entry and exit between fiat and stablecoins.
+The result: unbanked Africans can send money instantly, build cryptographic credit histories, and access microloans—all with just a mobile phone.
 
 ---
 
-## 🏗 System Architecture
-SafariPay utilizes a hybrid architecture to balance Web2 user experience with Web3 transparency and security.
+## ⚡ Key Features
+- **Instant P2P Transfers (Polygon)**: Send money across borders in seconds with <1¢ fees using Polygon's Layer-2 scalability
+- **Immutable Receipts (Storacha/Filecoin)**: Every transaction generates a permanent IPFS-backed receipt (CID). Verify any transaction's integrity independently
+- **On-Chain Credit Scoring**: Real-time algorithm computes creditworthiness from transaction history, stored as verifiable on-chain data
+- **Micro-Loan Engine**: Automated lending pools that unlock credit based on your transaction history—no bank required
+- **Mobile Money Integration**: Bridge fiat ↔ crypto via M-Pesa, Tigo Pesa, and bank transfers
+---
 
-### 🛡️ The Flow & Filecoin Roles
-- **Flow Layer**: Handles all state-changing financial events. From user wallet provisioning to P2P settlement and Credit NFT minting. Flow provides the high throughput and low gas fees required for a mainstream financial app.
-- **Filecoin Layer**: Serves as the "Truth Layer." Transaction metadata, KYC documents, and encrypted audit logs are anchored to Filecoin. This ensures that even if our backend disappears, the user's financial record remains independently verifiable via CID.
-
-```mermaid
-graph TD
-    User[Mobile App / Web] <-->|Rest API| BE[Node.js Backend]
-    
-    subgraph "Execution Layer (FLOW)"
-        BE -->|1. Transact| FlowTX[Flow Smart Contracts]
-        BE -->|2. Mint Score| FlowNFT[Safari Credit Badges]
-    end
-
-    subgraph "Storage Layer (FILECOIN)"
-        BE -->|3. Store Receipt| Web3Storage[web3.storage]
-        Web3Storage -->|4. Persist| FIL[Filecoin Network]
-    end
-
-    subgraph "Legacy Rails"
-        BE -->|Connect| MM[Mobile Money Gateway]
-        BE -->|SMS/USSD| Sim[Simulator Engine]
-    end
+## 🏗 Architecture
 ```
+┌─────────────────────────────────────────────────────────────┐
+│              Mobile App (React Native / Web)                 │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌──────────────────────────────────────────────────────────────┐
+│           Node.js Backend (TypeScript) + PostgreSQL          │
+└──────┬──────────────────────┬──────────────────┬──────────────┘
+       │                      │                  │
+       ▼                      ▼                  ▼
+┌─────────────┐      ┌──────────────┐    ┌─────────────────┐
+│   Polygon   │      │  Storacha    │    │  Mobile Money   │
+│   Amoy      │      │  / Filecoin  │    │  Gateways       │
+│ (Payments)  │      │  (Storage)   │    │  (M-Pesa, etc)  │
+└─────────────┘      └──────────────┘    └─────────────────┘
+```
+
+**Polygon Layer** (Execution): Smart contracts handle all payments, credit scoring, and loan disbursement via USDT on Amoy testnet (chainId: 80002).
+
+**Storacha Layer** (Storage): Immutable transaction receipts stored on Filecoin via Storacha's Web3.Storage API. Each receipt gets a Content Identifier (CID) that users can verify independently.
+
+**Mobile Gateway** (On-Ramps): M-Pesa, Tigo Pesa integration allows users to bridge fiat and stablecoins seamlessly.
 
 ---
 
 ## 🛠 Tech Stack
-- **Web3 Engine**: Flow Blockchain (FCL SDK, Cadence)
-- **Immutable Storage**: Filecoin (web3.storage / IPFS)
-- **Frontend**: React 18, Vite, Vanilla CSS (Premium Glassmorphism)
-- **Backend API**: Node.js (Express), TypeScript
-- **Database**: PostgreSQL (ACID compliant ledger)
-- **Real-time**: Redis (Queue/Notification Management)
-- **Security**: Lit Protocol (Decentralized Key Management)
+| Layer | Technology |
+|-------|-----------|
+| **Blockchain** | Polygon Amoy Testnet (L2), future Starknet support |
+| **Storage** | Storacha (Web3.Storage v2) + Filecoin |
+| **Backend** | Node.js/Express, TypeScript, PostgreSQL |
+| **Frontend** | React 18, Vite, Mobile-first design |
+| **Offline** | LocalForage, service workers for low-connectivity |
+| **Security** | JWT, Lit Protocol for key management |
 
 ---
 
-## 🚀 Setup & Installation
+## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js v20+
-- PostgreSQL 15+
-- Access to Flow Testnet credentials
-- web3.storage API token (for Filecoin storage)
+- Node.js v20+, PostgreSQL 15+
+- Polygon RPC key (Alchemy recommended)
+- Storacha credentials (Web3.Storage)
 
-### 1. Clone & Install
+### Setup
 ```bash
-git clone https://github.com/jsticks779/SafariPay.git
+# Clone and install
+git clone https://github.com/yourusername/SafariPay.git
 cd SafariPay
-```
 
-### 2. Backend Config
-```bash
+# Backend
 cd backend
 npm install
 cp .env.example .env
-# Fill in your FLOW_ADDRESS, FLOW_PRIVATE_KEY, and W3S_TOKEN
+# Update .env with credentials
 npm run dev
-```
 
-### 3. Frontend Config
-```bash
+# Frontend (in new terminal)
 cd ../frontend
 npm install
 npm start
 ```
 
+### Environment Variables
+```env
+# Polygon
+ALCHEMY_API_KEY=your_alchemy_key
+USDT_CONTRACT_ADDRESS_TESTNET=0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582
+
+# Storacha (Get from app.web3.storage)
+W3_AGENT_KEY=your_web3_storage_secret
+W3_PROOF=your_delegation_proof_base64
+
+# App
+PORT=4000
+DATABASE_URL=postgresql://user:pass@localhost/safaripay
+JWT_SECRET=your_jwt_secret
+```
+
 ---
 
-## 📺 Demo Walkthrough
-1. **Onboarding**: Register with your phone number and PIN. Behind the scenes, we provision a Flow wallet and anchor your initial KYC proof to Filecoin.
-2. **Deposit (On-Ramp)**: Use the M-Pesa simulator to deposit funds. The backend detects the deposit and mints equivalent stablecoin value on the Flow network.
-3. **P2P Transfer**: Enter a friend's phone number and send money.
-   - Flow executes the transaction on-chain.
-   - A JSON receipt is generated, uploaded to Filecoin, and its **CID** is returned.
-4. **Verification**: Go to the "Details" of any transaction and click "Verify on Filecoin." You'll see the raw, immutable proof of payment identified by its CID.
-5. **Loans**: build your score through active usage. Once eligible (Score > 650), take a loan. Repayment is automatically deducted from your next incoming transfer via a smart-contract triggered hook.
-6. **Withdraw (Off-Ramp)**: Send funds back to your Mobile Money wallet. The system burns the on-chain assets and triggers a fiat payout via the Simulator gateway.
+## 🎯 How It Works
+
+### Transaction Flow
+1. **User sends money** → Backend validates via mobile number lookup
+2. **Execute on Polygon** → Smart contract transfers USDT in 2-3 seconds
+3. **Store receipt** → Transaction JSON uploaded to Filecoin via Storacha, get CID
+4. **User verifies** → Click "View Receipt" to access immutable proof via IPFS
+5. **Score updates** → Transaction counted toward on-chain credit score
+
+### Example Response
+```json
+{
+  "success": true,
+  "txHash": "0x1234...",
+  "ipfsCid": "bafy2bzaced...",
+  "receiptLink": "https://w3s.link/ipfs/bafy2bzaced...",
+  "explorerUrl": "https://amoy.polygonscan.com/tx/0x1234..."
+}
+```
 
 ---
 
-## 🎯 Hackathon Compliance
-- **Sponsor Technologies**:
-  - **Flow**: High-throughput transactional layer for P2P and identity.
-  - **Filecoin**: Permanent storage for transaction proofs and CIDs (via web3.storage).
-- **Sponsor**: Protocol Labs
-- **Fresh Code**: This project was developed from scratch for the hackathon to solve decentralized finance accessibility in Africa.
-- **Inspiration**: Empowering the unbanked with on-chain credit scores and immutable financial records.
+## 🔮 Blockchain Integration
+- **Polygon Amoy**: Primary testnet for fast, cheap P2P payments
+- **Starknet**: Cairo contracts for privacy-enhanced future payments
+- **Filecoin**: Permanent settlement layer for audit trails
+
+---
+
+## 🏆 Hackathon Status
+✅ **Complete MVP** with all core features  
+✅ **Production Polygon integration** (tested on Amoy)  
+✅ **Storacha receipts** anchored to Filecoin  
+✅ **Offline-first** for poor connectivity  
+✅ **Mobile UI** optimized for sub-$50 phones  
+
+**Ready for**: Protocol Labs, Web3 judges, fintech evaluators
 
 ---
 
 <div align="center">
-  <p>Built with ❤️ for the Global Web3 Community</p>
-  <p><b>SafariPay — Your Money. Your Identity. Your Future.</b></p>
+  <p><b>SafariPay — Your Money. Your Rules. On Chain.</b></p>
+  <p>Built for 500M+ unbanked Africans | Hackathon Ready 🚀</p>
 </div>

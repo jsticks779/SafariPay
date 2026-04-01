@@ -209,10 +209,10 @@ export default function SendMoney() {
           </div>
         )}
 
-        {result?.ipfs_receipt && (
+        {result?.receiptLink && (
           <div style={{ padding: '16px 0', borderBottom: '1px solid var(--glass-border)', textAlign: 'center' }}>
             <a 
-              href={`https://w3s.link/ipfs/${result.ipfs_receipt}`} 
+              href={result.receiptLink} 
               target="_blank" 
               rel="noopener noreferrer"
               style={{ 
@@ -236,11 +236,11 @@ export default function SendMoney() {
           </div>
         )}
 
-        {result?.tx_hash && (
+        {result?.txHash && (
           <div style={{ padding: '16px 0' }}>
             <p style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 8, textTransform: 'uppercase', fontWeight: 600 }}>{t('tx_hash')}</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <p style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--primary)', wordBreak: 'break-all' }}>{result.tx_hash}</p>
+              <p style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--primary)', wordBreak: 'break-all' }}>{result.txHash}</p>
               <ExternalLink size={14} color="var(--primary)" />
             </div>
           </div>

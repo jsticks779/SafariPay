@@ -183,10 +183,10 @@ export default function SendGlobal() {
                     </div>
                 </div>
 
-                {result.ipfs_receipt && (
+                {result.receiptLink && (
                     <div style={{ padding: '16px 0', marginTop: 12, borderTop: '1px solid var(--glass-border)', textAlign: 'center' }}>
                         <a 
-                            href={`https://w3s.link/ipfs/${result.ipfs_receipt}`} 
+                            href={result.receiptLink} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             style={{ 

@@ -1,35 +1,82 @@
-import { StorageService } from '../services/storage.service';
-import { logger } from './logger';
+import { logger } from '../utils/logger';
 
-/**
- * Decentralized Storage Engine (Powered by Storacha / Filecoin)
- * Every financial event in SafariPay is anchored to the Filecoin network
- * using Storacha for immutable data persistence and transparency.
- */
-export class IPFSService {
-    /**
-     * Upload JSON data to Storacha (returns CIDv1 in base32 format: bafy...)
-     * Throws error if upload fails - caller should handle gracefully
-     */
-    static async uploadJSON(data: any): Promise<string> {
-        logger.info('STORAGE', '🪐 Initializing decentralized storage via Storacha...');
+export class StorageService {
+    private static client: any = null;
+    private static space: any = null;
 
-        // Map generic data to ReceiptData structure
-        const receiptData = {
-            txHash: data.txHash || data.tx_id || `TX_${Date.now()}`,
-            from: data.from || data.sender || 'Unknown',
-            to: data.to || data.receiver || 'Unknown',
-            amount: data.amount ? `${data.amount} ${data.currency || 'USDT'}` : 'N/A',
-            timestamp: data.timestamp || new Date().toISOString(),
-            network: data.network || 'Polygon'
-        };
+    private static async getClient() {
+        if (this.client) return this.client;
 
-        // Will throw error if upload fails
-        const cid = await StorageService.uploadReceipt(receiptData);
-        
-        logger.info('STORAGE', `✅ Receipt anchored to Filecoin: ${cid}`);
-        logger.info('STORAGE', `🔗 View at: https://w3s.link/ipfs/${cid}`);
-        
-        return cid;
+        try {
+            const agentKey = process.env.W3_AGENT_KEY?.trim();
+            const proofStr = process.env.W3_PROOF?.trim();
+
+            if (!agentKey || !proofStr) {
+                logger.warn('STORAGE', 'W3_AGENT_KEY or W3_PROOF missing in .env');
+                return null;
+            }
+
+            // Dynamic Imports for CommonJS
+            const { create } = await eval('import("@storacha/client")');
+            const { parse } = await eval('import("@ucanto/principal/ed25519")');
+            const { Delegation } = await eval('import("@ucanto/core/delegation")');
+
+            // 1. Initialize Agent using the DID Key
+            // Badala ya Signer.from, tunatumia parse kwa ajili ya did:key
+            const principal = parse(agentKey);
+            this.client = await create({ principal });
+
+            // 2. Extract Delegation Proof from Base64
+            const proofBytes = Buffer.from(proofStr, 'base64');
+            const delegation = await Delegation.extract(proofBytes);
+
+            if (!delegation.ok) {
+                throw new Error(`Failed to extract delegation: ${delegation.error?.message}`);
+            }
+
+            // 3. Add the proof to the client
+            await this.client.addSpace(delegation.ok);
+
+            // 4. Set current space
+            // Tunachukua space DID moja kwa moja kutoka kwenye delegation proof
+            const spaceDid = delegation.ok.capabilities[0].with;
+            await this.client.setCurrentSpace(spaceDid);
+
+            logger.info('STORAGE', `✅ Storacha Space is now active: ${spaceDid}`);
+
+            return this.client;
+        } catch (err: any) {
+            logger.error('STORAGE', `Initialization Failed: ${err.message}`);
+            return null;
+        }
+    }
+
+    static async uploadReceipt(data: any): Promise<string> {
+        const client = await this.getClient();
+
+        if (!client) {
+            throw new Error('Storage credentials not configured correctly.');
+        }
+
+        try {
+            const receiptJson = JSON.stringify(data);
+            // Kwenye Node.js, tunatumia Blob kutoka 'buffer' au global
+            const blob = new Blob([receiptJson], { type: 'application/json' });
+            const filename = `receipt_${data.txHash || Date.now()}.json`;
+            const file = new File([blob], filename, { type: 'application/json' });
+
+            logger.info('STORAGE', `📡 Uploading to Filecoin/IPFS...`);
+
+            // UploadFile inarudisha CID object
+            const cid = await client.uploadFile(file);
+            const cidString = cid.toString();
+
+            logger.info('STORAGE', `✅ Receipt anchored: ${cidString}`);
+            return cidString;
+
+        } catch (e: any) {
+            logger.error('STORAGE', `Upload failed: ${e.message}`);
+            throw new Error(`Storage upload failed: ${e.message}`);
+        }
     }
 }

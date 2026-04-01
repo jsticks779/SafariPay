@@ -40,7 +40,7 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static('uploads'));
 app.use(morgan('dev'));
-
+app.use('/api/v1/debug', debugRoutes);
 app.use('/api/', rateLimit({ windowMs: 60_000, max: 1000, message: { error: 'Too many requests' } }));
 
 app.get('/health', (_, res) => Responder.ok(res, { status: 'ok', service: 'SafariPay API v1.1', time: new Date() }));

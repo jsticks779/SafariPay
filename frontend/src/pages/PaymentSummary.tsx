@@ -159,7 +159,7 @@ export default function PaymentSummary() {
                 description: `Payment for request: ${request.description || `#${id?.slice(0, 8)}`}`,
             });
 
-            setTxHash(data.tx_hash || data.transaction?.tx_hash || '');
+            setTxHash(data.txHash || data.tx_hash || data.transaction?.tx_hash || '');
             setPaid(true);
 
             // Mark the request as paid on the backend (only if it's a DB request)
@@ -167,7 +167,7 @@ export default function PaymentSummary() {
                 try {
                     await api.post(`/transfer/request/${id}/pay`, {
                         payer_id: user.id,
-                        tx_hash: data.tx_hash,
+                        tx_hash: data.txHash || data.tx_hash,
                     });
                 } catch (e) {
                     // Non-critical — the payment still went through

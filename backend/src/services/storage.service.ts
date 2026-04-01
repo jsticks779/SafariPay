@@ -1,119 +1,147 @@
 import { logger } from '../utils/logger';
 
+/**
+ * StorageService: Manages decentralized receipt anchoring on Storacha (Web3.Storage v2).
+ * Attempts real upload to IPFS/Filecoin, handles failures gracefully.
+ * 
+ * ⚠️ KEY FORMAT REQUIREMENTS:
+ * - W3_AGENT_KEY: Must be a Storacha Secret Key (starts with 'M'), not a DID
+ *   Get from: https://app.web3.storage → API Tokens → Create Token
+ * - W3_PROOF: Base64-encoded delegation proof (optional but recommended)
+ */
 export class StorageService {
     private static client: any = null;
-    private static space: any = null;
+    private static initAttempted = false;
 
     /**
-     * Lazy-loads the Storacha ESM client in our CommonJS environment
+     * Validate key format and provide helpful diagnostics
+     */
+    private static validateKeyFormat(key: string): { valid: boolean; format: string; warning?: string } {
+        if (key.startsWith('M')) {
+            return { valid: true, format: 'Secret Key ✅' };
+        } else if (key.startsWith('did:key:')) {
+            return { 
+                valid: false, 
+                format: 'DID ❌', 
+                warning: 'DIDs are not valid Storacha keys. Please use a Web3.Storage Secret Key from app.web3.storage'
+            };
+        } else if (key.length > 60) {
+            return { 
+                valid: false, 
+                format: 'Unknown (long string) ❌',
+                warning: 'Key format unrecognized. Secret Keys start with "M"'
+            };
+        }
+        return { valid: false, format: 'Unknown ❌', warning: 'Invalid key format' };
+    }
+
+    /**
+     * Initialize Storacha client with Web3.Storage v2 credentials
      */
     private static async getClient() {
         if (this.client) return this.client;
+        if (this.initAttempted) return null; // Don't retry if already failed
+
+        this.initAttempted = true;
 
         try {
-            // Validate credentials first
             const agentKey = process.env.W3_AGENT_KEY?.trim();
             const proofStr = process.env.W3_PROOF?.trim();
-            
+
             if (!agentKey || !proofStr) {
-                logger.warn('STORAGE', 'W3_AGENT_KEY or W3_PROOF missing - Storacha disabled. Returning null for mock CID fallback.');
-                return null; // Signal to skip real upload and use mock
+                logger.error('STORAGE', '❌ Missing credentials:');
+                if (!agentKey) logger.error('STORAGE', '   - W3_AGENT_KEY not set (need Web3.Storage Secret Key from app.web3.storage)');
+                if (!proofStr) logger.error('STORAGE', '   - W3_PROOF not set (need delegation proof from Web3.Storage)');
+                return null;
             }
 
-            // Force dynamic ESM imports for CommonJS transpiler compatibility
-            const { create } = await eval('import("@storacha/client")');
-            const { Signer } = await eval('import("@ucanto/principal")');
-            const { Delegation } = await eval('import("@ucanto/core/delegation")');
-            const { CarReader } = await eval('import("@ipld/car")');
-
-            // 1. Initialize Agent from local key
-            const principal = Signer.from(agentKey);
-            this.client = await create({ principal });
-
-            // 2. Extract Delegation Proof
-            const proofBytes = Buffer.from(proofStr, 'base64');
-            const car = await CarReader.fromBytes(proofBytes);
-            
-            const blocks: any[] = [];
-            for await (const block of car.blocks()) {
-                blocks.push(block);
+            // Validate key format
+            const keyValidation = this.validateKeyFormat(agentKey);
+            logger.info('STORAGE', `Key format: ${keyValidation.format}`);
+            if (keyValidation.warning) {
+                logger.error('STORAGE', `⚠️  ${keyValidation.warning}`);
             }
-            
-            const delegation = Delegation.importDAG(blocks);
-            if (!delegation) throw new Error('Failed to import delegation DAG from proof');
-            
-            await this.client.addProof(delegation);
 
-            // 3. Find and set the 'samwel' space
-            const spaces = this.client.spaces();
-            this.space = spaces.find((s: any) => s.name === 'samwel');
+            // Use dynamic import with proper ESM support
+            const { create } = await import('@storacha/client');
             
-            if (this.space) {
-                await this.client.setCurrentSpace(this.space.did());
-                logger.info('STORAGE', `Storacha Space '${this.space.name}' is now active.`);
-            } else {
-                logger.warn('STORAGE', 'Space "samwel" not found in delegation. Fallback to default.');
-                if (spaces.length > 0) {
-                    this.space = spaces[0];
-                    await this.client.setCurrentSpace(this.space.did());
+            logger.info('STORAGE', `Initializing Storacha client with key: ${agentKey.substring(0, 15)}...`);
+            
+            // Create client - pass the Secret Key as the principal
+            this.client = await create({
+                principal: agentKey
+            });
+
+            // Try to add the delegation proof
+            try {
+                const { Delegation } = await import('@ucanto/core/delegation');
+                const proofBytes = Buffer.from(proofStr, 'base64');
+                const delegation = await Delegation.extract(proofBytes);
+
+                if (delegation.ok) {
+                    await this.client.addSpace(delegation.ok);
+                    const spaceDid = delegation.ok.capabilities[0]?.with;
+                    if (spaceDid) {
+                        await this.client.setCurrentSpace(spaceDid);
+                        logger.info('STORAGE', `✅ Space set: ${spaceDid.substring(0, 30)}...`);
+                    }
+                    logger.info('STORAGE', '✅ Storacha client ready with delegation');
                 } else {
-                    throw new Error('No spaces found in authorized delegation.');
+                    logger.warn('STORAGE', 'Could not extract delegation from proof');
                 }
+            } catch (delegErr: any) {
+                logger.warn('STORAGE', `Delegation setup warning: ${delegErr.message}`);
             }
 
+            logger.info('STORAGE', '✅ Storacha client initialized successfully');
             return this.client;
+
         } catch (err: any) {
-            logger.error('STORAGE', `Failed to initialize Storacha: ${err.message}. Using mock CID mode.`);
-            return null; // Return null to trigger mock CID in uploadReceipt
+            logger.error('STORAGE', `❌ Storacha initialization failed:`);
+            logger.error('STORAGE', `   Error: ${err.message}`);
+            logger.error('STORAGE', `   Stack: ${err.stack?.split('\n').slice(0, 3).join('\n')}`);
+            logger.error('STORAGE', `\n📋 TROUBLESHOOTING:`);
+            logger.error('STORAGE', `   1. Go to https://app.web3.storage`);
+            logger.error('STORAGE', `   2. Create a new API Token in Settings`);
+            logger.error('STORAGE', `   3. Copy the Secret Key (starts with 'M') to W3_AGENT_KEY in .env`);
+            logger.error('STORAGE', `   4. Export the delegation proof as base64 and set W3_PROOF`);
+            logger.error('STORAGE', `   5. Restart the backend`);
+            logger.error('STORAGE', `\n⚠️  Receipts will NOT be stored, but transactions will continue normally`);
+            return null;
         }
     }
 
     /**
-     * Anchors a transaction receipt to Filecoin via Storacha
-     * Returns CIDv1 (bafy...) format for w3s.link compatibility
-     * Throws error if upload fails - caller should NOT show "View Receipt" button
+     * Upload receipt to IPFS via Storacha
+     * Returns CID on success, null on failure (doesn't break transactions)
+     * 
+     * Success response includes receipt CID that can be accessed at https://w3s.link/ipfs/{CID}
      */
-    static async uploadReceipt(data: any): Promise<string> {
-        const client = await this.getClient();
-        
-        // If credentials are missing, throw error (don't return mock CID)
-        if (!client) {
-            throw new Error('Storage credentials not configured (W3_AGENT_KEY or W3_PROOF missing). Cannot upload receipt.');
-        }
-
+    static async uploadReceipt(data: any): Promise<string | null> {
         try {
-            const receipts = JSON.stringify(data);
-            const blob = new Blob([receipts], { type: 'application/json' });
-            const filename = `receipt_${data.txHash || Date.now()}.json`;
-            
-            logger.info('STORAGE', `📡 Uploading receipt to Storacha for ${data.txHash}...`);
-            
-            // Storacha v3 returns a CIDv1 in base32 format (starts with 'bafy...')
-            const cid = await client.uploadFile(
-                new File([blob], filename, { type: 'application/json' })
-            );
-            
-            const cidString = String(cid);
-            
-            // Validate that we got a proper CIDv1 (bafy... or other base32 prefix)
-            if (!cidString.startsWith('bafy')) {
-                logger.warn('STORAGE', `Unexpected CID format from Storacha: ${cidString}`);
-                // Even if unexpected format, return it if it looks like a valid CID
-                if (cidString.match(/^ba[a-z2-7]{50,}/)) {
-                    logger.info('STORAGE', `✅ Receipt anchored to Filecoin: ${cidString}`);
-                    return cidString;
-                }
-                throw new Error(`Invalid CID format from Storacha: ${cidString}`);
+            const client = await this.getClient();
+            if (!client) {
+                logger.debug('STORAGE', 'Client unavailable, skipping receipt upload');
+                return null;
             }
-            
-            logger.info('STORAGE', `✅ Receipt anchored to Filecoin: ${cidString}`);
+
+            const receiptJson = JSON.stringify(data, null, 2);
+            const blob = new Blob([receiptJson], { type: 'application/json' });
+            const filename = `safari_receipt_${data.txHash || Date.now()}.json`;
+            const file = new File([blob], filename, { type: 'application/json' });
+
+            logger.info('STORAGE', `📤 Uploading receipt: ${filename} (${blob.size} bytes)`);
+            const cid = await client.uploadFile(file);
+            const cidString = cid.toString();
+
+            logger.info('STORAGE', `✅ Receipt stored! CID: ${cidString}`);
+            logger.info('STORAGE', `   🔗 View at: https://w3s.link/ipfs/${cidString}`);
             return cidString;
-            
+
         } catch (e: any) {
-            const errorMsg = `Storage upload failed: ${e.message}`;
-            logger.error('STORAGE', errorMsg);
-            // Throw error so transaction response knows this failed
-            throw new Error(errorMsg);
+            logger.error('STORAGE', `❌ Upload failed: ${e.message}`);
+            logger.debug('STORAGE', `   Details: ${e.stack?.split('\n')[0] || e.toString()}`);
+            return null;
         }
     }
 }
